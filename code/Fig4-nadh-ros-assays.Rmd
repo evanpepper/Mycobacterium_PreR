@@ -1,0 +1,528 @@
+---
+title: "Figure 4 Notebook: NADH/NAD+ Ratios, ROS Assays"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the data from the NADH/NAD+ quantification assay and the endogenous log-phase growth ROS assay
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+  library(ggrepel)
+}
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 14),
+                    legend.text = element_text(size = 10),
+                    strip.text = element_text(size = 10))
+
+ros.strain.colors <- c('blue', 'blue4', 'blue4',
+                       'red', 'red4', 'red4',
+                       'cyan1', 'cyan3', 'cyan4')
+```
+
+First, analyzing data from the NADH/NAD Assays with and without INH treatment on a few select isolates.
+
+Kit used was the Enzychrom NADH/NAD+ Assay Kit from Bioassay Systems (https://bioassaysys.com/nad-nadh-assay-e2nd-100-kit/)
+
+```{r}
+# processing all 3 experiments separately
+assays <- c('1', '2', '3')
+assay.standard.list <- list()
+assay.data.list <- list()
+
+for (a in 1:length(assays)) {
+  raw.data <- readxl::read_excel(path = paste('../data/Fig4/nadh-nad-assay-', assays[a], '.xlsx', sep = ''))
+  # multiple reads were performed at the t0 and t15 time points
+  # several reads within 1 minute of initializing experiment
+  # also performed multiple reads around 15 minutes, up to 30 minutes
+  read.0a <- raw.data %>% filter(read == 1)
+  read.0b <- raw.data %>% filter(read == 2)
+  read.0c <- raw.data %>% filter(read == 3)
+  read.15a <- raw.data %>% filter(read == 4)
+  read.15b <- raw.data %>% filter(read == 5)
+  read.15c <- raw.data %>% filter(read == 6)
+  read.15d <- raw.data %>% filter(read == 7)
+  read.15e <- raw.data %>% filter(read == 8)
+  
+  if (assays[a] == '1') {
+    
+    read.0b <- raw.data %>% filter(read == 2)
+    read.15a <- raw.data %>% filter(read == 3)
+    standard.delta <- read.15a[3:6] - read.0b[3:6]
+    nad.delta <- as.numeric(read.15a[7:10]) - as.numeric(read.0b[7:10])
+    nadh.delta <- as.numeric(read.15a[1, c(11:14)]) - as.numeric(read.0b[1, c(11:14)])
+    # getting standard curve
+    standard.data <- tibble(nad.values = c(10, 6, 3, 0), standard.values = as.numeric(standard.delta))
+    # getting slope for standard curve
+    standard.curve <- lm(formula = standard.data$standard.values ~ standard.data$nad.values)
+    slope <- standard.curve$coefficients[[2]]
+    intercept <- standard.curve$coefficients[[1]]
+
+    # splitting data into NAD+ and NADH measurements, subtracting blank
+    delta.od.blank <- as.numeric(standard.delta[4])
+    nad.concentrations <- as.numeric(( nad.delta - delta.od.blank ) / slope)
+    nadh.concentrations <- as.numeric(( nadh.delta - delta.od.blank ) / slope)
+    # assigning data to samples
+    assay.data <- tibble(strain = c('wt-anc', 'wt-anc', 'wt-s1', 'wt-s1'),
+                         replicate = c('a', 'b', 'a', 'b'),
+                         nad.total = nad.concentrations, nadh.total = nadh.concentrations)
+    assay.data$ratio <- assay.data$nadh.total / assay.data$nad.total
+    assay.data$treatment <- 'minus INH'
+    # adding in pseudo data for plus treatment (for plotting)
+    pseudo.data <- tibble(strain = 'wt-s1', replicate = c('a', 'b'),
+                          nad.total = 0, nadh.total = 0, ratio = 0,
+                          treatment = 'plus INH')
+    # rejoining with actual data
+    assay.data <- rbind(assay.data, pseudo.data)
+    # filtering out data from problematic wells
+    assay.data <- assay.data %>% filter(ratio >= 0)
+  }
+  
+  else if (assays[a] == '2') {
+    standard.delta <- read.15c[1, c(3:6)] - read.0c[1, c(3:6)]
+    nad.delta <- read.15c[2, c(3:14)] - read.0c[2, c(3:14)]
+    nadh.delta <- read.15d[3, c(3:14)] - read.0c[3, c(3:14)]
+    # getting standard curve
+    standard.data <- tibble(nad.values = c(10, 6, 3, 0), standard.values = as.numeric(standard.delta))
+    # getting slope for standard curve
+    standard.curve <- lm(formula = standard.data$standard.values ~ standard.data$nad.values)
+    slope <- standard.curve$coefficients[[2]]
+    intercept <- standard.curve$coefficients[[1]]
+    
+    # splitting data into NAD+ and NADH measurements
+    delta.od.blank <- as.numeric(standard.delta[4])
+    nad.concentrations <- as.numeric(( nad.delta - delta.od.blank ) / slope)
+    nadh.concentrations <- as.numeric(( nadh.delta - delta.od.blank ) / slope)
+    
+    assay.data <- tibble(strain = c('wt-anc', 'wt-anc', 'wt-anc', 'wt-L2', 'wt-L2', 'wt-L2',
+                                    'ohrR-anc', 'ohrR-anc', 'ohrR-anc', 'ohrR-L10', 'ohrR-L10', 'ohrR-L10'),
+                         replicate = c('a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c'),
+                         nad.total = nad.concentrations, nadh.total = nadh.concentrations)
+    
+    assay.data$ratio <- assay.data$nadh.total / assay.data$nad.total
+    assay.data$treatment <- 'minus INH'
+    # filtering out data from problematic wells
+    assay.data <- assay.data %>% filter(ratio >= 0)
+  }
+  
+  # else if (assays[a] == '3') {
+  else {
+    standard.delta <- read.15e[1, c(3:6)] - read.15a[1, c(3:6)]
+    nad.delta <- read.15e[2, c(3:14)] - read.15a[2, c(3:14)]
+    nadh.delta <- read.15e[3, c(3:14)] - read.15a[3, c(3:14)]
+    # getting standard curve
+    standard.data <- tibble(nad.values = c(10, 6, 3, 0), standard.values = as.numeric(standard.delta))
+    # getting slope for standard curve
+    standard.curve <- lm(formula = standard.data$standard.values ~ standard.data$nad.values)
+    slope <- standard.curve$coefficients[[2]]
+    intercept <- standard.curve$coefficients[[1]]
+    
+    # splitting data into NAD+ and NADH measurements
+    delta.od.blank <- as.numeric(standard.delta[4])
+    nad.concentrations <- as.numeric(( nad.delta - delta.od.blank ) / slope)
+    nadh.concentrations <- as.numeric(( nadh.delta - delta.od.blank ) / slope)
+    
+    assay.data <- tibble(strain = c('wt-anc', 'wt-anc', 'wt-anc', 'wt-L2', 'wt-L2', 'wt-L2',
+                                    'ohrR-anc', 'ohrR-anc', 'ohrR-anc', 'ohrR-L10', 'ohrR-L10', 'ohrR-L10'),
+                         replicate = c('a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c'),
+                         nad.total = nad.concentrations, nadh.total = nadh.concentrations)
+    
+    assay.data$ratio <- assay.data$nadh.total / assay.data$nad.total
+    assay.data$treatment <- 'plus INH'
+    # filtering out data from problematic wells
+    assay.data <- assay.data %>% filter(ratio >= 0)
+  }
+  
+  assay.data.list[[a]] <- assay.data
+  write_csv(assay.data, file = paste('../data/Fig4/nadh-nad-assay-', assays[a], '-processed-data.csv', sep = ''))
+  #################################################################################
+  # plotting standard curve
+  assay.standard.list[[a]] <- ggplot(data = standard.data, aes(x = nad.values, y = standard.values)) +
+    geom_point(color = 'red4', size = 2) +
+    geom_smooth(method = 'lm', formula = y~x, se = F, color = 'red3') +
+    annotate('text', x = 6, y = 0.5,
+             label = paste('y = ', round(slope, digits = 3), 'x ', round(intercept, digits = 3), sep = ''),
+             color = 'red4', size = 8) +
+    xlab('[Pyridine Nucleotide, NAD+] (µM)') + ylab(expression(Delta~Delta~OD[565])) +
+    ggtitle(paste('Standard Curve, Assay ', assays[a], sep = '')) +
+    theme_minimal() +
+    plot.theme
+}
+```
+
+```{r}
+assay.standard.list[[1]]
+assay.standard.list[[2]]
+assay.standard.list[[3]]
+```
+```{r}
+# now binding all data from three experiments and creating one figure
+assay.1 <- read_csv(file = '../data/Fig4/nadh-nad-assay-1-processed-data.csv', show_col_types = FALSE)
+assay.2 <- read_csv(file = '../data/Fig4/nadh-nad-assay-2-processed-data.csv', show_col_types = FALSE)
+assay.3 <- read_csv(file = '../data/Fig4/nadh-nad-assay-3-processed-data.csv', show_col_types = FALSE)
+
+all.assay.data <- rbind(assay.1, assay.2, assay.3)
+all.assay.data$treatment <- factor(all.assay.data$treatment, levels = c('minus INH', 'plus INH'))
+# grouping wt-s1 and wt-L2 together for plotting
+all.assay.data.grouped <- all.assay.data
+all.assay.data.grouped <- all.assay.data.grouped %>%
+  mutate(strain = ifelse(strain == 'wt-s1', 'wt-ndh', strain),
+         strain = ifelse(strain == 'wt-L2', 'wt-ndh', strain))
+all.assay.data.grouped$strain <- factor(all.assay.data.grouped$strain,
+                                        levels = c('wt-anc', 'wt-ndh', 'ohrR-anc', 'ohrR-L10'))
+all.assay.data.grouped <- all.assay.data.grouped %>% filter(ratio > 0)
+# refactoring all data
+all.assay.data$strain <- factor(all.assay.data$strain, levels = c('wt-anc', 'wt-s1', 'wt-L2', 'ohrR-anc', 'ohrR-L10'))
+#################################################################################
+# t tests for significance
+test.1 <- t.test(x = all.assay.data.grouped %>% filter(strain == 'wt-anc', treatment == 'minus INH') %>% pull(ratio),
+                 y = all.assay.data.grouped %>% filter(strain %in% c('wt-ndh'), treatment == 'minus INH') %>% pull(ratio),
+                 var.equal = FALSE)
+test.2 <- t.test(x = all.assay.data.grouped %>% filter(strain == 'wt-anc', treatment == 'plus INH') %>% pull(ratio),
+                 y = all.assay.data.grouped %>% filter(strain %in% c('wt-ndh'), treatment == 'plus INH') %>% pull(ratio),
+                 var.equal = FALSE)
+
+print(paste('welch t.test 1 p value = ', (test.1$p.value), '; ',
+            'welch t.test 2 p value = ', (test.2$p.value), sep = ''))
+```
+
+```{r}
+# creating figures
+nadh.nad.points <- ggplot(all.assay.data.grouped, aes(x = strain, y = ratio, fill = treatment, color = treatment)) +
+  geom_point(position = position_dodge(width = 0.75), size = 3, shape = 21) +
+  xlab('') + ylab('NADH/NAD+ Ratio') +
+  scale_fill_manual(values = c('white', 'black')) +
+  scale_color_manual(values = c('black', 'black')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+```
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig4-panel-a2.pdf', height = 4.5, width = 4)
+print(nadh.nad.points)
+dev.off()
+```
+
+```{r}
+nadh.nad.boxes <- ggplot(all.assay.data.grouped, aes(x = strain, y = ratio, color = interaction(strain, treatment), fill = treatment)) +
+  geom_boxplot(outliers = F, linewidth = 1, position = position_dodge(preserve = "single")) +
+  xlab('') + ylab('NADH/NAD+ Ratio') +
+  scale_color_manual(values = c('blue', 'blue4', 'red', 'red4',
+                               'blue', 'blue4', 'red', 'red4')) +
+  scale_fill_manual(values = c('white', 'grey70')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig4-panel-a1.pdf', height = 4.5, width = 4)
+print(nadh.nad.boxes)
+dev.off()
+```
+
+**Figure 3 Panel C**
+```{r}
+nadh.nad.points
+nadh.nad.boxes
+```
+Generating plots for supplemental figure for NAD+, NADH, and NADH/NAD+ ratios
+```{r}
+# creating figures
+nad.points <- ggplot(all.assay.data, aes(x = strain, y = nad.total, fill = treatment, color = treatment)) +
+  geom_point(position = position_dodge(width = 0.75), size = 3, shape = 21) +
+  xlab('') + ylab('NAD+ (µM)') +
+  scale_fill_manual(values = c('white', 'black')) +
+  scale_color_manual(values = c('black', 'black')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+nadh.points <- ggplot(all.assay.data, aes(x = strain, y = nadh.total, fill = treatment, color = treatment)) +
+  geom_point(position = position_dodge(width = 0.75), size = 3, shape = 21) +
+  xlab('') + ylab('NADH (µM)') +
+  scale_fill_manual(values = c('white', 'black')) +
+  scale_color_manual(values = c('black', 'black')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+nadh.nad.points <- ggplot(all.assay.data, aes(x = strain, y = ratio, fill = treatment, color = treatment)) +
+  geom_point(position = position_dodge(width = 0.75), size = 3, shape = 21) +
+  xlab('') + ylab('NADH/NAD+ Ratio') +
+  scale_fill_manual(values = c('white', 'black')) +
+  scale_color_manual(values = c('black', 'black')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-a-points.pdf', height = 4.5, width = 4)
+print(nad.points)
+dev.off()
+
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-b-points.pdf', height = 4.5, width = 4)
+print(nadh.points)
+dev.off()
+
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-c-points.pdf', height = 4.5, width = 4)
+print(nadh.nad.points)
+dev.off()
+```
+
+```{r}
+nad.boxes <- ggplot(all.assay.data, aes(x = strain, y = nad.total, color = interaction(strain, treatment), fill = treatment)) +
+  geom_boxplot(outliers = F, linewidth = 1, position = position_dodge(preserve = "single")) +
+  xlab('') + ylab('NAD+ (µM)') +
+  scale_color_manual(values = c('blue', 'blue4', 'blue4', 'red', 'red4',
+                               'blue', 'blue4', 'blue4', 'red', 'red4')) +
+  scale_fill_manual(values = c('white', 'grey70')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6))
+
+nadh.boxes <- ggplot(all.assay.data, aes(x = strain, y = nadh.total, color = interaction(strain, treatment), fill = treatment)) +
+  geom_boxplot(outliers = F, linewidth = 1, position = position_dodge(preserve = "single")) +
+  xlab('') + ylab('NADH (µM)') +
+  scale_color_manual(values = c('blue', 'blue4', 'blue4', 'red', 'red4',
+                               'blue', 'blue4', 'blue4', 'red', 'red4')) +
+  scale_fill_manual(values = c('white', 'grey70')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6))
+
+nadh.nad.boxes <- ggplot(all.assay.data, aes(x = strain, y = ratio, color = interaction(strain, treatment), fill = treatment)) +
+  geom_boxplot(outliers = F, linewidth = 1, position = position_dodge(preserve = "single")) +
+  xlab('') + ylab('NADH/NAD+ Ratio') +
+  scale_color_manual(values = c('blue', 'blue4', 'blue4', 'red', 'red4',
+                               'blue', 'blue4', 'blue4', 'red', 'red4')) +
+  scale_fill_manual(values = c('white', 'grey70')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 60, vjust = 0.6))
+```
+
+```{r}
+# generating figures
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-a-boxes.pdf', height = 4.5, width = 4)
+print(nad.boxes)
+dev.off()
+
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-b-boxes.pdf', height = 4.5, width = 4)
+print(nadh.boxes)
+dev.off()
+
+pdf(file = '../supplemental-figures/figure-panels/fig2-panel-c-boxes.pdf', height = 4.5, width = 4)
+print(nadh.nad.boxes)
+dev.off()
+```
+
+Next, analyzing the endogenous ROS assay, looking at levels of ROS during log-phase growth of various strains
+
+The fluorescent dye used was H2DCFDA (https://www.thermofisher.com/order/catalog/product/D399)
+
+```{r}
+rfu.data.1 <- readxl::read_excel(path = '../data/Fig4/ros-assay-1.xlsx')
+rfu.data.1$exp <- '1'
+rfu.data.2 <- readxl::read_excel(path = '../data/Fig4/ros-assay-2.xlsx')
+rfu.data.2$exp <- '2'
+rfu.data.3 <- readxl::read_excel(path = '../data/Fig4/ros-assay-3.xlsx')
+rfu.data.3$exp <- '3'
+# row binding all data
+rfu.data <- rbind(rfu.data.1, rfu.data.2, rfu.data.3)
+rfu.data$rfus <- as.numeric(rfu.data$rfus)
+rfu.data$exp <- as.numeric(rfu.data$exp)
+# getting averages of controls
+rfu.data.controls <- rfu.data %>% filter(strain == 'control')
+avg.control.rfus <- mean(rfu.data.controls$rfus, na.rm = T)
+# subtracting blanks off of experimental data
+rfu.data.samples <- rfu.data %>% filter(strain != 'control')
+rfu.data.samples$rfus <- rfu.data.samples$rfus - avg.control.rfus
+# removing outliers due to edge effects
+rfu.data.samples$rep.label <- paste(rfu.data.samples$strain, '-', rfu.data.samples$replicate, sep = '')
+rfu.data.samples <- rfu.data.samples %>% filter(rfus <= 80000, rep.label != 'ohrR-anc-c')
+# calculating rfus per cfu for each sample
+rfu.data.samples$rfus.per.cfu <- rfu.data.samples$rfus / rfu.data.samples$cfus
+
+#rfu.data.samples$strain <- factor(rfu.data.samples$strain, levels = c('nb-wt', 'wt-s1', 'wt-L2', 'ohrR-anc', 'ohrR-L10', 'wj-wt', 'mshA-ko', 'mshA-comp'))
+rfu.data.samples$inh.label <- paste(rfu.data.samples$isoniazid, ' µg/mL\nisoniazid', sep = '')
+rfu.data.samples$inh.label <- factor(rfu.data.samples$inh.label, levels = c('0 µg/mL\nisoniazid', '1 µg/mL\nisoniazid', '5 µg/mL\nisoniazid',
+                                                                            '10 µg/mL\nisoniazid', '25 µg/mL\nisoniazid', '100 µg/mL\nisoniazid',
+                                                                            '500 µg/mL\nisoniazid'))
+
+# now calculating rfus per cfu fold change with respect to the parental strain from which each isolate was derived
+assay.1 <- rfu.data.samples %>% filter(exp == 1)
+concentrations <- unique(assay.1$isoniazid)
+assay.1.data.list <- list()
+for (c in 1:length(concentrations)) {
+  data <- assay.1 %>% filter(isoniazid == concentrations[c])
+  wt.avg <- mean(data %>% filter(strain == 'nb-wt') %>% pull(rfus.per.cfu), na.rm = T)
+  data$fc <- data$rfus.per.cfu / wt.avg
+  assay.1.data.list[[c]] <- data
+}
+assay.1.data <- do.call(rbind, assay.1.data.list)
+
+# performing same fold change analysis, this time with two different WT parental strains
+assay.2 <- rfu.data.samples %>% filter(exp == 2)
+concentrations <- unique(assay.2$isoniazid)
+assay.2.data.list <- list()
+for (c in 1:length(concentrations)) {
+  nb.data <- assay.2 %>% filter(isoniazid == concentrations[c],
+                                strain %in% c('nb-wt', 'wt-s1', 'wt-L2', 'ohrR-anc', 'ohrR-L10'))
+  nb.wt.avg <- mean(nb.data %>% filter(strain == 'nb-wt') %>% pull(rfus.per.cfu), na.rm = T)
+  nb.data$fc <- nb.data$rfus.per.cfu / nb.wt.avg
+  
+  wj.data <- assay.2 %>% filter(isoniazid == concentrations[c],
+                                strain %in% c('wj-wt', 'mshA-ko', 'mshA-comp'))
+  wj.wt.avg <- mean(wj.data %>% filter(strain == 'wj-wt') %>% pull(rfus.per.cfu), na.rm = T)
+  wj.data$fc <- wj.data$rfus.per.cfu / wj.wt.avg
+  
+  # rejoining two datasets
+  assay.2.data.list[[c]] <- rbind(nb.data, wj.data)
+}
+assay.2.data <- do.call(rbind, assay.2.data.list)
+
+# calculating fold changed for third ROS experiment
+assay.3 <- rfu.data.samples %>% filter(exp == 3)
+samples <- unique(assay.3$rep.label)
+assay.3.data.list <- list()
+
+assay.3.wt.mean <- mean(assay.3 %>% filter(strain == 'wj-wt') %>% pull(rfus.per.cfu))
+assay.3$fc <- assay.3$rfus.per.cfu / assay.3.wt.mean
+
+for (s in 1:length(samples)) {
+  sample.data <- assay.3 %>% filter(rep.label == samples[s])
+  assay.3.data.list[[s]] <- tibble(plate = sample.data$plate[1], strain = sample.data$strain[1],
+                                 replicate = sample.data$replicate[1], isoniazid = sample.data$isoniazid[1],
+                                 cfus = sample.data$cfus[1], rfus = mean(sample.data$rfus), exp = sample.data$exp[1],
+                                 rep.label = sample.data$rep.label[1], rfus.per.cfu = mean(sample.data$rfus.per.cfu),
+                                 inh.label = sample.data$inh.label[1], fc = mean(sample.data$fc))
+}
+assay.3.data <- do.call(rbind, assay.3.data.list)
+
+# finally binding back all data
+all.rfu.data <- rbind(assay.1.data, assay.2.data, assay.3.data)
+```
+
+```{r}
+write_csv(all.rfu.data, file = '../data/Fig4/ros-data-processed.csv')
+```
+
+```{r}
+# preparing data for plotting
+all.rfu.data$strain <- factor(all.rfu.data$strain, levels = c('nb-wt', 'wt-s1', 'wt-L2',
+                                                              'ohrR-anc', 'ohrR-s5', 'ohrR-L10',
+                                                              'wj-wt', 'mshA-ko', 'mshA-comp'))
+all.rfu.data$inh.label <- factor(all.rfu.data$inh.label, levels = c('0 µg/mL\nisoniazid', '1 µg/mL\nisoniazid', '5 µg/mL\nisoniazid',
+                                                                    '10 µg/mL\nisoniazid', '25 µg/mL\nisoniazid', '100 µg/mL\nisoniazid',
+                                                                    '500 µg/mL\nisoniazid'))
+#all.rfu.data.selected <- all.rfu.data %>% filter(strain %in% c('ohrR-anc', 'ohrR-L10', 'mshA-ko', 'mshA-comp'))
+all.ros.conditions <- ggplot(all.rfu.data, aes(x = strain, y = fc, color = strain)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_point(shape = 21, fill = 'white', size = 1) +
+  scale_color_manual(values = ros.strain.colors) +
+  facet_wrap(~inh.label, nrow = 1) +
+  xlab('') + ylab('Fold change RFUs per cell\nWRT parental wildtype') +
+  theme_minimal() +
+  plot.theme +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+        legend.position = 'none',
+        strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig4.pdf', height = 5, width = 12)
+print(all.ros.conditions)
+dev.off()
+```
+
+**Figure S3**
+```{r}
+all.ros.conditions
+```
+
+```{r}
+# selecting specific data to plot for figure 4 panel b
+# all.rfu.data.select <- all.rfu.data %>% filter(isoniazid == 0, !strain %in% c('nb-wt', 'wj-wt'))
+all.rfu.data.select <- all.rfu.data %>% filter(isoniazid == 0)
+ros.fc <- ggplot(all.rfu.data.select, aes(x = strain, y = fc, color = strain)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_point(shape = 21, fill = 'white', size = 3) +
+  # scale_fill_manual(values = ros.strain.colors) +
+  scale_color_manual(values = ros.strain.colors) +
+  xlab('') + ylab('Fold change RFUs per cell\nWRT parental wildtype') +
+  theme_minimal() +
+  plot.theme +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+        legend.position = 'none',
+        strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig4-panel-b.pdf', height = 5, width = 5)
+print(ros.fc)
+dev.off()
+```
+
+```{r}
+# performing t tests to check for significance
+nb.strains <- c('wt-s1', 'wt-L2', 'ohrR-anc', 'ohrR-s5', 'ohrR-L10')
+wj.strains <- c('mshA-ko', 'mshA-comp')
+for (s in 1:length(nb.strains)) {
+  nb.test <- t.test(x = all.rfu.data.select %>% filter(strain == 'nb-wt') %>% pull(fc),
+                    y = all.rfu.data.select %>% filter(strain == nb.strains[s]) %>% pull(fc))
+  print(paste('t.test p.value b/w nb-wt and ',
+              nb.strains[s], ' = ',
+              round(nb.test$p.value, digits = 8)))
+}
+
+for (s in 1:length(wj.strains)) {
+  wj.test <- t.test(x = all.rfu.data.select %>% filter(strain == 'wj-wt') %>% pull(fc),
+                    y = all.rfu.data.select %>% filter(strain == wj.strains[s]) %>% pull(fc))
+  print(paste('t.test p.value b/w wj-wt and ',
+              wj.strains[s], ' = ',
+              round(wj.test$p.value, digits = 8)))
+}
+```
+**Figure 4 Panel B**
+```{r}
+ros.fc
+```

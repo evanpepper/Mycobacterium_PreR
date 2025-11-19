@@ -1,0 +1,17 @@
+﻿sample.id,experiment
+LLR-INH-B-13-minus,isoniazid llr
+LLR-INH-B-12-plus,isoniazid llr
+LLR-INH-B-19-plus,isoniazid llr
+LLR-INH-B-39-plus,isoniazid llr
+LLR-INH-F-20-minus,isoniazid llr
+LLR-INH-F-7-plus,isoniazid llr
+LLR-INH-G-17-minus,isoniazid llr
+LLR-INH-G-4-plus,isoniazid llr
+LLR-INH-G-8-plus,isoniazid llr
+LLR-INH-G-15-plus,isoniazid llr
+LLR-INH-G-16-plus,isoniazid llr
+LLR-INH-G-25-plus,isoniazid llr
+LLR-INH-H-44-minus,isoniazid llr
+LLR-INH-H-4-plus,isoniazid llr
+LLR-INH-H-8-plus,isoniazid llr
+WT,NA

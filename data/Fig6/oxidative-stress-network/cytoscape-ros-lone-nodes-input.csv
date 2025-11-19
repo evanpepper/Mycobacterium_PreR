@@ -1,0 +1,32 @@
+Source,Target,TFOE log2 FC,PValue,Adj.PValue,Interaction,ChIP-seq Evidence,GO annotation,Source.rv.number,Target.rv.number,Abs TFOE log2 FC
+NA,Rv2159c,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2159c,NA
+NA,sodA,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv3846,NA
+NA,sodC,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv0432,NA
+NA,lpdC,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv0462,NA
+NA,ahpE,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2238c,NA
+NA,ahpD,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2429,NA
+NA,ahpC,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2428,NA
+NA,mpt53,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2878c,NA
+NA,bcpB,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv1608c,NA
+NA,dipZ,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv2874,NA
+NA,bpoC,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv0554,NA
+NA,Rv0771,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv0771,NA
+NA,bpoA,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv3473c,NA
+NA,Rv1767,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv1767,NA
+NA,Rv3177,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv3177,NA
+NA,Rv1531,NA,NA,NA,NA,NA,Target: antioxidant activity,NA,Rv1531,NA
+NA,mca,NA,NA,NA,NA,NA,Target: mycothiol-dependent detoxification,NA,Rv1082,NA
+NA,Rv1021,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv1021,NA
+NA,Rv3221A,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv3221A,NA
+fhaB,NA,NA,NA,NA,NA,NA,Source: response to oxidative stress,Rv0019c,NA,NA
+Rv2745c,NA,NA,NA,NA,NA,NA,Source: response to oxidative stress,Rv2745c,NA,NA
+NA,dnaK,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv0350,NA
+NA,fpg,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv2924c,NA
+NA,pafA,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv2097c,NA
+sigJ,NA,NA,NA,NA,NA,NA,Source: response to oxidative stress,Rv3328c,NA,NA
+NA,msrB,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv2674,NA
+NA,hsp,NA,NA,NA,NA,NA,Target: response to oxidative stress,NA,Rv0251c,NA
+NA,bfrB,NA,NA,NA,NA,NA,Target: response to nitrosative stress,NA,Rv3841,NA
+NA,uvrB,NA,NA,NA,NA,NA,Target: response to nitrosative stress,NA,Rv1633,NA
+NA,ogt,NA,NA,NA,NA,NA,Target: response to nitrosative stress,NA,Rv1316c,NA
+NA,Rv3916c,NA,NA,NA,NA,NA,Target: response to nitrosative stress,NA,Rv3916c,NA

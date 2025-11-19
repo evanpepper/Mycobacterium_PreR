@@ -1,0 +1,311 @@
+---
+title: "Figure 3 Notebook: INH Resistant Strains, Phenotypes and Genotypes"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the dose response data and whole genome sequencing (WGS) data from the isolates obtained from the fluctuation assays as well as strains shared with us by Catherine Vilcheze and Bill Jacobs from Albert Einstein College of Medicine, specifically from their 2011 publication: https://doi.org/10.1128/aac.00020-11
+
+WGS data from this study can be found on the SRA with the BioProject accession number PRJNA1363199:
+
+WGS data was processed and analyzed using an in house pipeline, which can be found at: https://github.com/baliga-lab/bwa_pipeline
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+  library(ggrepel)
+}
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 14),
+                    legend.text = element_text(size = 10),
+                    strip.text = element_text(size = 10))
+
+evolved.strain.colors <- c('blue', 'blue4', 'red', 'red4',
+                           'cyan1', 'cyan3', 'cyan4')
+all.evolved.strain.colors <- c('blue', 'blue4', 'red', 'red4',
+                               'gold2', 'darkgoldenrod4', 'green3', 'darkgreen',
+                               'cyan1', 'cyan3', 'cyan4')
+ros.strain.colors <- c('blue', 'blue4', 'blue4',
+                       'red', 'red4', 'red4',
+                       'cyan1', 'cyan3', 'cyan4')
+```
+
+```{r}
+# reading in all phenotypic data generated from analysis performed in Fig2-Fluctuation-Assay.Rmd
+phenotypes <- read_csv(file = '../data/Fig3/all-isolate-phenotypes.csv')
+# getting averages of all strains
+isolate.avgs <- phenotypes %>% group_by(isolate) %>%
+  summarise(avg.ic50 = mean(ic50),
+            avg.ic50.fc = mean(ic50.fc),
+            sd.ic50.fc = sd(ic50.fc), se.ic50.fc = (sd(ic50.fc) / sqrt(n())),
+            avg.fitness = mean(fitness),
+            sd.fitness = sd(fitness), se.fitness = (sd(fitness) / sqrt(n())),
+            group.size = n())
+
+# formatting data into groups
+# first re-splitting isolate information to factor
+isolate.avgs$background <- unlist(lapply(strsplit(isolate.avgs$isolate, '-'), '[', 1))
+isolate.avgs$strain <- unlist(lapply(strsplit(isolate.avgs$isolate, '-'), '[', 2))
+isolate.avgs$type <- ifelse(isolate.avgs$strain == 'anc', 'anc', 'inhR')
+# fixing mshA strain labels
+isolate.avgs$type <- ifelse(isolate.avgs$strain == 'KO', 'KO', isolate.avgs$type)
+isolate.avgs$type <- ifelse(isolate.avgs$strain == 'comp', 'comp', isolate.avgs$type)
+isolate.avgs$phenotype <- paste(isolate.avgs$background, '-', isolate.avgs$type, sep = '')
+# removing data for future plot and setting factor levels
+isolate.avgs.select <- isolate.avgs %>% filter(!background %in% c('mfs1', 'ntaA'), isolate != 'ohrR-L4')
+isolate.avgs.select$phenotype <- factor(isolate.avgs.select$phenotype, levels = c('wt-anc', 'wt-inhR',
+                                                                                  'ohrR-anc', 'ohrR-inhR',
+                                                                                  'wj-anc', 'mshA-KO', 'mshA-comp'))
+```
+
+```{r}
+# for Mtb, INH drug resistance is defined as an MIC ≥ 0.4 µg/mL
+# Mtb H37Rv has an INH MIC of ~0.06 µg/mL
+# we are defining INH resistance as an equivalent fold change increase in IC50 in Msm
+resistance.fc <- 0.4 / 0.06
+resistance.log2.fc <- log2(0.4 / 0.06)
+# also including line for limit of detection
+lod <- max(phenotypes$ic50.fc)
+
+# creating figure for relative fitness vs ic50 fold change
+resistance.fitness.plot.3 <- ggplot(isolate.avgs.select, aes(x = avg.ic50.fc, y = avg.fitness, fill = phenotype, label = isolate)) +
+  geom_vline(xintercept = resistance.fc, linetype = 'dashed', color = 'red3') +
+  geom_vline(xintercept = lod, linetype = 'dashed', color = 'gray20') +
+  geom_point(alpha = 0.9, shape = 21, size = 2, color = 'black') +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       xmin = avg.ic50.fc - se.ic50.fc, xmax = avg.ic50.fc + se.ic50.fc, 
+                                       color = phenotype), width = 0.015, alpha = 0.4) +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       ymin = avg.fitness - se.fitness, ymax = avg.fitness + se.fitness,
+                                       color = phenotype), width = 0.025, alpha = 0.4) +
+  geom_label_repel(aes(color = phenotype),
+                   box.padding = 0.15, point.padding = 0, segment.color = 'black', fill = 'white',
+                   size = 4.5, min.segment.length = 0, force = 55) +
+  scale_x_log10() +
+  xlab(bquote(Isoniazid~IC[50]~fold~change~WRT~parental~wildtype)) + 
+  ylab('Relative fitness WRT parental wildtype') +
+  scale_color_manual(values = evolved.strain.colors) +
+  scale_fill_manual(values = evolved.strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig3-panel-c.pdf', height = 6, width = 14)
+print(resistance.fitness.plot.3)
+dev.off()
+```
+
+```{r}
+# performing t test for p value in text
+avg.mshA.KO.ic50.fc <- mean(phenotypes %>% filter(isolate == 'mshA-KO') %>% pull(ic50.fc))
+avg.mshA.KO.fitness <- mean(phenotypes %>% filter(isolate == 'mshA-KO') %>% pull(fitness))
+mshA.test <- t.test(x = phenotypes %>% filter(isolate == 'wj-anc') %>% pull(ic50.fc),
+                    y = phenotypes %>% filter(isolate == 'mshA-KO') %>% pull(ic50.fc))
+mshA.test$p.value
+```
+
+**Figure 3 Panel C**
+```{r}
+resistance.fitness.plot.3
+```
+
+```{r}
+# creating figure for relative fitness vs ic50 fold change for all strains assayed, supplemental figure
+isolate.avgs$phenotype <- factor(isolate.avgs$phenotype, levels = c('wt-anc', 'wt-inhR',
+                                                                    'ohrR-anc', 'ohrR-inhR',
+                                                                    'mfs1-anc', 'mfs1-inhR',
+                                                                    'ntaA-anc', 'ntaA-inhR',
+                                                                    'wj-anc', 'mshA-KO', 'mshA-comp'))
+isolate.avgs <- isolate.avgs %>% filter(isolate != 'ohrR-L4')
+
+resistance.fitness.plot.all.strains <- ggplot(isolate.avgs, aes(x = avg.ic50.fc, y = avg.fitness, fill = phenotype, label = isolate)) +
+  geom_vline(xintercept = resistance.fc, linetype = 'dashed', color = 'red3') +
+  geom_vline(xintercept = lod, linetype = 'dashed', color = 'gray20') +
+  geom_point(alpha = 0.9, shape = 21, size = 2, color = 'black') +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       xmin = avg.ic50.fc - se.ic50.fc, xmax = avg.ic50.fc + se.ic50.fc, 
+                                       color = phenotype), width = 0.015, alpha = 0.4) +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       ymin = avg.fitness - se.fitness, ymax = avg.fitness + se.fitness,
+                                       color = phenotype), width = 0.025, alpha = 0.4) +
+  geom_label_repel(aes(color = phenotype),
+                   box.padding = 0.15, point.padding = 0, segment.color = 'black', fill = 'white',
+                   # size = 3, min.segment.length = 0, force = 50) +
+                   size = 4.5, min.segment.length = 0, force = 30) +
+  scale_x_log10() +
+  xlab(bquote(Isoniazid~IC[50]~fold~change~WRT~parental~wildtype)) + 
+  ylab('Relative fitness WRT parental wildtype') +
+  scale_color_manual(values = all.evolved.strain.colors) +
+  scale_fill_manual(values = all.evolved.strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig3.pdf', height = 8, width = 14)
+print(resistance.fitness.plot.all.strains)
+dev.off()
+```
+
+Next, reading in results from analyzing the WGS data from each of these isolates to summarize the information
+
+```{r}
+# reading in filtered mutation data generated in FilterVariants.Rmd
+isolate.mutations <- read_csv(file = '../data/Fig3/all-isolate-mutations-filtered.csv')
+```
+```{r}
+# removing samples that will not be included in further analysis
+strains.to.exclude <- c('31_3C', 'ohrR-L4',
+                        'LLR-INH-B-12-plus',
+                        'LLR-INH-G-16-plus', 'LLR-INH-G-8-plus',
+                        'LLR-INH-H-4-plus', 'LLR-INH-H-44-minus', 'LLR-INH-H-8-plus')
+# removing samples and intergenic mutations
+select.isolate.mutations <- isolate.mutations %>% filter(!ID %in% strains.to.exclude,
+                                                         EFFECT != 'INTERGENIC')
+# creating a categorical summary of the SNP data to easily visualize which isolates have which mutations
+unique.mutants <- unique(select.isolate.mutations$ID)
+unique.loci <- unique(select.isolate.mutations$msm.gene)
+occurrence.tables <- list()
+for (i in 1:length(unique.mutants)) {
+  isolate.data <- select.isolate.mutations %>% filter(ID == unique.mutants[i])
+  occurrences <- list()
+  for (l in 1:length(unique.loci)) {
+    loci <- unique.loci[l]
+    if (loci %in% isolate.data$msm.gene) {
+      occurrences[l] <- 1
+    }
+    else {
+      occurrences[l] <- 0
+    }
+  }
+  occurrence.tables[[i]] <- tibble(isolate = unique.mutants[i],
+                                   locus = unique.loci,
+                                   mutation = unlist(occurrences))
+}
+occurrence.table <- do.call(rbind, occurrence.tables)
+# adding back in samples that did not have any SNPs found
+wt.table <- tibble(isolate = 'wt-anc', locus = unique.loci, mutation = 0)
+occurrence.table <- rbind(occurrence.table, wt.table)
+# adding extra columns to data
+occurrence.table$mutation <- as.factor(occurrence.table$mutation)
+occurrence.table$background <- unlist(lapply(strsplit(occurrence.table$isolate, '-'), '[', 1))
+occurrence.table$strain <- unlist(lapply(strsplit(occurrence.table$isolate, '-'), '[', 2))
+occurrence.table$phenotype <- ifelse(occurrence.table$strain == 'anc', 'S', 'R')
+occurrence.table$strain.phenotype <- paste(occurrence.table$background, '-', occurrence.table$phenotype, sep = '')
+occurrence.table$strain.phenotype <- factor(occurrence.table$strain.phenotype,
+                                            levels = c('wt-S', 'wt-R', 'ohrR-S', 'ohrR-R'))
+# order strains by ic50 fold change
+phenotypes.ordered <- isolate.avgs %>%
+  filter(!isolate %in% c('wj-anc', 'mshA-KO', 'mshA-comp')) %>%
+  arrange(desc(avg.ic50.fc))
+strain.levels <- phenotypes.ordered$isolate
+occurrence.table <- occurrence.table[order(occurrence.table$locus), ]
+unique.loci <- unique(occurrence.table$locus)
+occurrence.table$isolate <- factor(occurrence.table$isolate, levels = c(strain.levels))
+```
+
+```{r}
+# creating categorical map to display the occurrence of mutations in each isolate
+# mutation.grid.1 <- ggplot(occurrence.table, aes(x = locus, y = ordered(isolate, levels = rev(strain.levels)))) +
+mutation.grid.1 <- ggplot(occurrence.table, aes(x = ordered(isolate, levels = rev(strain.levels)),
+                                                y = ordered(locus, levels = rev(unique.loci)))) +
+  geom_tile(aes(fill = strain.phenotype), alpha = 0.6, color = 'black', linewidth = 0, width = 0.8, height = 0.8) +
+  scale_fill_manual(values = c('blue', 'blue4', 'red', 'red4')) +
+  scale_x_discrete(position = "top") +
+  # xlab('Mutated locus') + ylab('Sequenced isolate') +
+  # xlab('Sequenced isolate') + ylab('Mutated locus') +
+  xlab('') + ylab('') +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 90, hjust = 0, size = 14),
+        axis.text.y = element_text(size = 14),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# pdf(file = '../figures/figure-panels/fig3-panel-b1.pdf', width = 12, height = 6)
+pdf(file = '../figures/figure-panels/fig3-panel-a1.pdf', width = 14, height = 6)
+print(mutation.grid.1)
+dev.off()
+```
+
+```{r}
+# creating categorical map to display the occurrence of mutations in each isolate
+mutation.grid.2 <- ggplot(occurrence.table, aes(x = ordered(isolate, levels = rev(strain.levels)),
+                                                y = ordered(locus, levels = rev(unique.loci)))) +
+  geom_tile(aes(fill = mutation), linewidth = 0, width = 0.6, height = 0.6) +
+  scale_fill_manual(values = c('NA', 'black')) +
+  scale_x_discrete(position = "top") +
+  # xlab('Mutated locus') + ylab('Sequenced isolate') +
+  # xlab('Sequenced isolate') + ylab('Mutated locus') +
+  xlab('') + ylab('') +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 90, hjust = 0, size = 14),
+        axis.text.y = element_text(size = 14),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# pdf(file = '../figures/figure-panels/fig3-panel-b2.pdf', width = 12, height = 6)
+pdf(file = '../figures/figure-panels/fig3-panel-a2.pdf', width = 14, height = 6)
+print(mutation.grid.2)
+dev.off()
+```
+
+
+**Figure 3 Panel A**
+```{r}
+mutation.grid.1
+mutation.grid.2
+```
+
+```{r}
+# creating ordered plot of level of resistance in strains included in mutation occurance figure
+# first subsetting data to only include strains of interest
+phenotypes.ordered.select <- isolate.avgs.select %>% filter(phenotype %in% c('wt-anc', 'wt-inhR', 'ohrR-anc', 'ohrR-inhR'))
+
+ic50.ordered <- ggplot(phenotypes.ordered.select, aes(x = ordered(isolate, levels = rev(strain.levels)), y = avg.ic50.fc)) +
+  geom_point(aes(fill = phenotype), shape = 21) +
+  geom_errorbar(aes(ymin = avg.ic50.fc - se.ic50.fc, ymax = avg.ic50.fc + se.ic50.fc, color = phenotype), width = 0.25) +
+  scale_fill_manual(values = c('blue', 'blue4', 'red', 'red4')) +
+  scale_color_manual(values = c('blue', 'blue4', 'red', 'red4')) +
+  xlab('') + ylab('') +
+  theme_minimal() +
+  plot.theme +
+  theme(axis.text.x = element_blank(),
+        legend.position = 'none')
+
+
+pdf(file = '../figures/figure-panels/fig3-panel-b.pdf', width = 10, height = 1.5)
+print(ic50.ordered)
+dev.off()
+```
+
+**Figure 3 Panel B**
+```{r}
+ic50.ordered
+```

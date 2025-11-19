@@ -1,0 +1,102 @@
+---
+title: "Variant filtering of results from WGS data analysis"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Feb 14, 2025
+
+This notebook is for filtering the variants (mutations) called by any of the three variant callers in our pipeline (VarScan, Samtools, GATK)
+
+WGS data was processed and analyzed using an in house pipeline, which can be found at: https://github.com/baliga-lab/bwa_pipeline
+
+WGS data from this study can be found on the SRA with the following Project ID:
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+  library(ggrepel)
+}
+
+# reading in genome annotation files
+gene.map <- read_csv(file = '../data/genome-annotations/msm-mc2155-full-genome-annotation.csv')
+rbh.map <- read_csv(file = '../data/genome-annotations/mtb-msm-rbh-map.csv')
+```
+
+```{r}
+# creating a function for filtering the variants and merging the data with genome annotations
+filterVariants <- function(mutation.table, controls) {
+  # selecting controls for given experiment
+  control.strains <- controls
+  # extracting data for controls
+  control.snps <- mutation.table %>% filter(ID %in% control.strains)
+  # getting all unique variant positions in control strain(s)
+  control.snp.positions <- unique(control.snps$POS)
+  # removing all control variant positions from experimental data
+  exp.snps <- mutation.table %>% filter(!ID %in% control.strains)
+  exp.snps.filtered <- exp.snps %>% filter(!POS %in% control.snp.positions)
+  exp.snps.filtered$n.callers <- str_count(exp.snps.filtered$VARIANT_CALLERS, ':') + 1
+  exp.snps.filtered <- exp.snps.filtered %>% filter(n.callers >= 2)
+  # filtering out synonymous snps
+  exp.snps.filtered <- exp.snps.filtered %>% filter(EFFECT != 'SYNONYMOUS_CODING')
+  exp.snps.filtered$variant.reads <- as.numeric(unlist(lapply(strsplit(exp.snps.filtered$VARIANT_READS, ':'), '[', 2)))
+  # removing mutations with less than 20 supporting reads
+  exp.snps.filtered <- exp.snps.filtered %>% filter(variant.reads > 20)
+  # reformatting and merging with genome annotation data
+  names(exp.snps.filtered)[11] <- 'msm.new.locus'
+  exp.snps.filtered <- left_join(exp.snps.filtered, gene.map, by = 'msm.new.locus', na_matches = 'never')
+  exp.snps.filtered <- left_join(exp.snps.filtered, rbh.map, by = 'msm.locus.tag', na_matches = 'never')
+  exp.snps.filtered <- exp.snps.filtered %>% dplyr::select(ID, POS, `1ST_REF_BASE`, ALT, CHANGE, EFFECT, IMPACT, CLASS,
+                                                           CODON, AA_CHANGE, SAMTOOLS_FREQ, VARIANT_CALLERS, VARIANT_FREQS,
+                                                           VARIANT_READS, FREQ, F1, msm.new.locus, msm.locus.tag, msm.gene, msm.protein.id,
+                                                           mtb.locus.tag, mtb.gene.name, fident, alnlen, mismatch, gapopen, qstart, 
+                                                           qend, tstart, evalue, bits)
+  return(exp.snps.filtered)
+}
+```
+
+```{r}
+# filtering batch one (one-step-selection-batch-1)
+control.ids.1 <- c('17_0A', '18_0B', '19_0C', '20_0D')
+mutations.1 <- read_csv(file = '../data/wgs-results/one-step-selection-batch-1/all-variant-calls.csv')
+mutations.filtered.1 <- filterVariants(mutations.1, control.ids.1)
+mutations.filtered.1
+```
+
+```{r}
+# filtering batch one (one-step-selection-batch-2)
+control.ids.2 <- c('WT')
+mutations.2 <- read_csv(file = '../data/wgs-results/one-step-selection-batch-2/all-variant-calls.csv')
+mutations.filtered.2 <- filterVariants(mutations.2, control.ids.2)
+mutations.filtered.2
+```
+
+```{r}
+# filtering batch one (fluctuation-assay-batch-1)
+control.ids.3 <- c('wt-anc1', 'wt-anc2')
+mutations.3 <- read_csv(file = '../data/wgs-results/fluctuation-assay-batch-1/all-variant-calls.csv')
+mutations.filtered.3 <- filterVariants(mutations.3, control.ids.3)
+mutations.filtered.3
+```
+
+Finally, collating all mutation data into one file
+
+```{r}
+# merging all 3 datasets
+all.mutations.filtered <- rbind(mutations.filtered.1, mutations.filtered.2, mutations.filtered.3)
+write_csv(all.mutations.filtered, file = '../data/wgs-results/all-isolate-mutations-filtered.csv')
+```
