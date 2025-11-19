@@ -66,12 +66,11 @@ resistance evolution**
 
 2.  Install dependencies for each R Markdown file, found at the beginning of each script.
 
-3.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into figures/ and generated results will appear in data/
+3.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
 
 ## Citation
 
-*(Add citation once manuscript is published or available as a
-preprint.)*
+*(DOI)*
 
 ## Contact
 
