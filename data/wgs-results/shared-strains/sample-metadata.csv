@@ -1,0 +1,12 @@
+﻿Sample,Sample.ID,DNA.Conc.ng.µl,260:280,260:230,Note
+1,WJ-WT-A,264.9,1.98,2.12,newly sequenced
+2,WJ-WT-B,251.2,1.98,2.15,newly sequenced
+3,WJ-WT-C,0.1,0.63,1.90,not sequenced
+4,mshA-KO-A,55.1,2.05,1.98,newly sequenced
+5,mshA-KO-B,200.2,1.97,2.08,newly sequenced
+6,mshA-KO-C,124.1,2.00,2.12,newly sequenced
+7,mshA-comp-A,213.6,2.00,2.15,newly sequenced
+8,mshA-comp-B,166.5,2.00,2.16,newly sequenced
+9,mshA-comp-C,234.0,2.02,2.14,newly sequenced
+10,NB-WT-A,67.8,2.03,2.10,from 20240509
+11,NB-WT-B,106.4,2.01,2.23,from 20240509

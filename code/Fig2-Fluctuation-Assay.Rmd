@@ -1,0 +1,457 @@
+---
+title: "Figure 2 Notebook: Fluctuation Assay"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the data generated from the fluctuation assay of wildtype and LLRT strains of *M. smegmatis* and for analyzing the dose response assays of the INH resistant isolates from each of these genomic backgrounds. 
+
+Fluctuation assay data was analyzed using FALCOR, originally developed by Hall et al. 2009 (http://genomics.brocku.ca/FALCOR/)
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(growthcurver)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+}
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 14),
+                    legend.text = element_text(size = 10),
+                    strip.text = element_text(size = 10))
+
+# setting colors for each LLRT strain background
+strain.colors <- c('blue', 'red', 'gold2', 'green3', 'purple')
+evolved.strain.colors <- c('blue', 'blue4', 'red', 'red4',
+                           'gold2', 'darkgoldenrod4', 'green3', 'darkgreen')
+```
+
+```{r}
+# reading in cfu counts data from 3 separate fluctuation assay experiments
+data.list <- list()
+for (e in 1:3) {
+  # first reading in cfu counts to get population sizes
+  cfus <- read_csv(file = paste('../data/Fig2/fluctuation-assay-', e, '-cfus.csv', sep = ''), col_types = cols())
+  cfus$cfus <- cfus$colonies / cfus$dilution
+  cfus$name <- paste(unlist(lapply(strsplit(cfus$sample, '-'), '[', 1)), '-',
+                     unlist(lapply(strsplit(cfus$sample, '-'), '[', 2)), sep = '')
+  cfus.avg <- cfus %>% group_by(name) %>% summarise(cfus = mean(cfus))
+  # plated 4 µl, getting cfus per ml
+  cfus.avg$cfus.per.ml <- cfus.avg$cfus * (1000 / 4)
+  # next, reading in cfu counts of mutants growing on high [INH]
+  mutants <- read_csv(file = paste('../data/Fig2/fluctuation-assay-', e, '-mutants.csv', sep = ''), col_types = cols())
+  # since I plated 100 µl, getting mutants per ml
+  mutants$mutants.per.ml <- round(mutants$mutants * 10, digits = 0)
+  # merging cfu data with mutant counts
+  cfu.data <- full_join(cfus.avg, mutants)
+  cfu.data$mutant.proportion <- cfu.data$mutants.per.ml / cfu.data$cfus.per.ml
+  cfu.data$strain <- unlist(lapply(strsplit(cfu.data$name, '-'), '[', 1))
+  cfu.data$concentration.label <- paste(cfu.data$concentration, ' µg/mL isoniazid', sep = '')
+  cfu.data$experiment <- e
+  # filtering for only 500 µg/mL INH experiment
+  cfu.data <- cfu.data %>% filter(concentration == 500)
+  data.list[[e]] <- cfu.data
+}
+all.cfu.data <- do.call(rbind, data.list)
+all.cfu.data$strain <- factor(all.cfu.data$strain, levels = c('wt', 'ohrR', 'mfs1', 'ntaA', 'fas'))
+```
+```{r}
+# optional write out to file
+write_csv(all.cfu.data, file = '../data/Fig2/fluctuation-assay-calculated-data.csv')
+```
+
+```{r}
+# function for converting standard axis ticks with better scientific notation
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  parse(text = l)
+}
+```
+
+```{r}
+# generating plot for mutant proportion in each sample
+freq.plot <- ggplot(all.cfu.data, aes(x = strain, y = mutant.proportion, fill = strain)) +
+  geom_boxplot(outlier.color = NA, alpha = 0.8) +
+  geom_jitter(alpha = 0.5, width = 0.1, shape = 21) +
+  xlab('') + ylab('Frequency of INHR acquisition\nwithin population') +
+  scale_y_continuous(labels = fancy_scientific, transform = 'log10') +
+  scale_fill_manual(values = strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig2-panel-a.pdf', width = 5, height = 5)
+print(freq.plot)
+dev.off()
+```
+
+**Figure 2 Panel A**
+```{r}
+freq.plot
+```
+
+```{r}
+# performing t-tests to check for significant differences between wildtype and LLRT strains
+llrt.strains <- c('ohrR', 'mfs1', 'ntaA', 'fas')
+p.values <- list()
+adj.p.values <- list()
+for (s in 1:length(llrt.strains)) {
+  t.test <- t.test(x = all.cfu.data %>% filter(strain == 'wt') %>% pull(mutant.proportion),
+                   y = all.cfu.data %>% filter(strain == llrt.strains[s]) %>% pull(mutant.proportion))
+  # saving p value and bonferroni corrected p value
+  p.values[s] <- t.test$p.value
+  adj.p.values[s] <- t.test$p.value * length(llrt.strains)
+}
+t.test.data <- tibble(strain.1 = 'wt', strain.2 = llrt.strains,
+                      p.value = unlist(p.values), adj.p.value = unlist(adj.p.values))
+print(t.test.data)
+```
+
+```{r}
+# the file of all data calculated was used with FALCOR to determine the MSS-MLE mutation rate
+# rate is calculated as rate * 10^-7 per generation
+falcor.data <- read_csv(file = '../data/Fig2/falcor-rates.csv', col_types = cols())
+falcor.data$strain <- factor(falcor.data$strain, levels = c('wt', 'ohrR', 'mfs1', 'ntaA', 'fas'))
+
+mss.mle <- ggplot(falcor.data, aes(x = strain, y = rate, color = strain)) +
+  geom_point(size = 2.5) +
+  geom_errorbar(data = falcor.data, mapping = aes(x = strain, ymax = rate + upper.dif, ymin = rate - lower.dif), width = 0.2, linewidth = 1.2) +
+  xlab('') + ylab('MSS-MLE INHR acquisition rate\n(10^-7 per generation)') +
+  #scale_y_log10() +
+  scale_color_manual(values = strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig2-panel-b.pdf', width = 5, height = 5)
+print(mss.mle)
+dev.off()
+```
+
+**Figure 2 Panel B**
+```{r}
+mss.mle
+```
+
+```{r}
+# after picking INH resistant isolates from each of the strain backgrounds from the fluctuation assay,
+# we performed dose response assays to measure INH IC50 and relative fitness for every isolate
+# first creating function for converting time from hours:minutes:seconds to just hours
+# function for converting time
+convert.time <- function(time.vector) {
+  new.out <- c()
+  for(x in time.vector)
+  {
+    temporal.vector <- strsplit(x,split = ":")[[1]]
+    new.out <- c(new.out, as.numeric(temporal.vector[1]) + ((as.numeric(temporal.vector[3]) +
+                                                               (60*as.numeric(temporal.vector[2])))/3600))
+  }
+  new.out <- round(new.out, digits = 3)
+  new.out
+}
+```
+
+```{r}
+assays <- c('1', '2', '3', '4', '5')
+group.metrics <- list()
+for (a in 1:length(assays)) {
+  kinetic.data <- read_csv(file = paste('../data/Fig2/dose-response-assay-', assays[a], '.csv', sep = ''),
+                           name_repair = 'minimal', col_types = cols())
+  # converting time units
+  kinetic.data$Time <- convert.time(as.character(kinetic.data$Time))
+  # getting blank data averages, removing any contaminated outliers
+  blanks <- startsWith(names(kinetic.data), prefix = 'blank')
+  blank.data <- cbind(kinetic.data$Time, kinetic.data[, blanks, drop = FALSE])
+  blank.data[, 2:ncol(blank.data)] <- replace_with_na_all(blank.data[, 2:ncol(blank.data)],
+                                                          condition = ~.x > 0.10)
+  names(blank.data)[1] <- 'time'
+  blank.avg <- rowMeans(blank.data[, c(2:ncol(blank.data))], na.rm = T)
+  # reformatting growth data to be more easily plot-able and usable
+  samples <- !startsWith(names(kinetic.data), prefix = 'blank')
+  expt.data <- cbind(kinetic.data[, samples, drop = FALSE])
+  names(expt.data) <- c('time', names(expt.data[2:ncol(expt.data)]))
+  # subtracting off blanks
+  expt.data[2:ncol(expt.data)] <- expt.data[2:ncol(expt.data)] - blank.avg
+  # using the growth curver library to estimate growth curve parameters, including AUC (auc_e)
+  # removing all data after 48 hours, as this is about when WT untreated reaches stationary
+  sample.data <- SummarizeGrowthByPlate(plate = expt.data %>% filter(time <= 48))
+  # splitting sample names into corresponding data
+  sample.data$background <- unlist(lapply(strsplit(sample.data$sample, '-'), '[', 1))
+  sample.data$strain <- unlist(lapply(strsplit(sample.data$sample, '-'), '[', 2))
+  sample.data$rep <- unlist(lapply(strsplit(sample.data$sample, '-'), '[', 3))
+  sample.data$concentration <- as.numeric(unlist(lapply(strsplit(sample.data$sample, '-'), '[', 4)))
+  sample.data$sample <- paste(sample.data$background, '-',
+                               sample.data$strain, '-', sample.data$rep, sep = '')
+  sample.data <- sample.data %>%
+    dplyr::select(background, strain, rep, concentration, sample, auc_e, sample)
+  
+  # The next step is to calculate the relative fitness and INH IC50
+  unique.samples <- unique(sample.data$sample)
+  sampling.freq <- 1e-2
+  concentration.range <- seq(sampling.freq, (max(sample.data$concentration) * 4), by = sampling.freq)
+  
+  rg.tables.list <- list()
+  isolate.metrics.list <- list()
+  suppressWarnings(for (s in 1:length(unique.samples)) {
+    selected.data <- sample.data %>% filter(sample == unique.samples[s])
+    # getting relative growth at each concentration relative to the uninhibited growth
+    selected.data$relative.growth <- selected.data$auc_e / selected.data$auc_e[1]
+    # save rg data to list
+    rg.tables.list[[s]] <- selected.data
+    # writing logic to catch data that doesn't reach ≤ 85% relative growth (ie. very resistant)
+    if (tail(selected.data$relative.growth, n = 1) >= 0.85) {
+      inferred.ic50 <- max(concentration.range)
+    }
+    else {
+      # fitting a log model
+      log.model <- drm(relative.growth ~ concentration, data = selected.data,
+                       fct = LL.4(fixed = c(NA, 0, 1, NA)))
+      pred.growth <- predict(object = log.model, newdata = data.frame(concentration.range))
+      pred.table <- data.frame(x = concentration.range, y = pred.growth)
+      # extracting IC50 value
+      inferred.ic50 <- pred.table$x[which.min(abs(pred.table$y - 0.50))]
+      
+      if (inferred.ic50 == sampling.freq) {
+        inferred.ic50 <- max(concentration.range)
+      }
+      else {
+        inferred.ic50 <- inferred.ic50
+      }
+    }
+    # relative fitness is uninhibited growth vs average control growth from all lines
+    avg.line.wt.auc <- mean(sample.data %>%
+                              filter(background == 'wt', strain == 'anc', concentration == 0) %>% pull(auc_e))
+    relative.fitness <- selected.data$auc_e[1] / avg.line.wt.auc
+    # saving ic50 value and relative fitness for each sample
+    isolate.metrics.list[[s]] <- tibble(sample = unique.samples[s],
+                                        ic50 = inferred.ic50,
+                                        fitness = relative.fitness,
+                                        auc = selected.data$auc_e[1],
+                                        assay = as.numeric(assays[a]))
+  })
+  group.metrics[[a]] <- do.call(rbind, isolate.metrics.list)
+}
+isolate.metrics <- do.call(rbind, group.metrics)
+```
+
+```{r}
+# clearing up memory
+gc()
+# resplitting isolate name into corresponding data
+isolate.metrics$background <- unlist(lapply(strsplit(isolate.metrics$sample, '-'), '[', 1))
+isolate.metrics$strain <- unlist(lapply(strsplit(isolate.metrics$sample, '-'), '[', 2))
+isolate.metrics$rep <- unlist(lapply(strsplit(isolate.metrics$sample, '-'), '[', 3))
+isolate.metrics$isolate <- paste(isolate.metrics$background, '-', isolate.metrics$strain, sep = '')
+isolate.metrics <- isolate.metrics %>%
+  dplyr::select(background, strain, rep, isolate, sample, assay, ic50, fitness, auc)
+# iterating over every sample to get ic50 fold change WRT the untreated controls
+unique.samples <- unique(isolate.metrics$sample)
+relative.ic50.sample.data <- list()
+suppressWarnings(for (s in 1:length(unique.samples)) {
+  sample.ic50 <- isolate.metrics %>% filter(sample == unique.samples[s]) %>% pull(ic50)
+  sample.assay <- as.numeric(isolate.metrics %>% filter(sample == unique.samples[s]) %>% pull(assay))
+  avg.wt.ic50 <- mean(isolate.metrics %>% filter(isolate == 'wt-anc', assay == sample.assay) %>% pull(ic50))
+  # calculating ic50 fold change and ic50 log2 fold change
+  relative.ic50.sample.data[[s]] <- tibble(sample = unique.samples[s],
+                                           assay = sample.assay,
+                                           ic50.fc = sample.ic50 / avg.wt.ic50,
+                                           ic50.log2.fc = log2(sample.ic50 / avg.wt.ic50))
+})
+relative.ic50.data <- do.call(rbind, relative.ic50.sample.data)
+# rejoining with the rest of the isolate data
+isolate.metrics <- full_join(isolate.metrics, relative.ic50.data)
+```
+
+```{r}
+# writing full isolate data to file
+write_csv(isolate.metrics, file = '../data/Fig2/all-isolate-phenotypes.csv')
+write_csv(isolate.metrics, file = '../data/Fig3/all-isolate-phenotypes.csv')
+```
+
+```{r}
+# creating boxplots for fitness and ic50 fold change
+isolate.metrics$type <- ifelse(isolate.metrics$strain == 'anc', 'anc', 'inhR')
+isolate.metrics$phenotype <- paste(isolate.metrics$background, '-', isolate.metrics$type, sep = '')
+# removing data for future plot and setting factor levels
+isolate.metrics <- isolate.metrics %>% filter(!background %in% c('wj', 'mshA'))
+isolate.metrics$background <- factor(isolate.metrics$background,
+                                     levels = c('wt', 'ohrR', 'mfs1', 'ntaA'))
+isolate.metrics$phenotype <- factor(isolate.metrics$phenotype, levels = c('wt-anc', 'wt-inhR',
+                                                                          'ohrR-anc', 'ohrR-inhR',
+                                                                          'mfs1-anc', 'mfs1-inhR',
+                                                                          'ntaA-anc', 'ntaA-inhR'))
+
+# for Mtb, INH drug resistance is defined as an MIC ≥ 0.4 µg/mL
+# Mtb H37Rv has an INH MIC of ~0.06 µg/mL
+# we are defining INH resistance as an equivalent fold change increase in IC50 in Msm
+resistance.fc <- 0.4 / 0.06
+resistance.log2.fc <- log2(0.4 / 0.06)
+# also including line for limit of detection
+lod <- max(isolate.metrics$ic50.fc)
+# resistance boxplots
+resistance.boxplot <- ggplot(isolate.metrics, aes(x = background, y = ic50.fc, fill = phenotype)) +
+  geom_hline(yintercept = resistance.fc, linetype = 'dashed', color = 'red3') +
+  geom_hline(yintercept = lod, linetype = 'dashed', color = 'gray20') +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8) +
+  geom_point(position = position_jitterdodge(), alpha = 0.5, shape = 21) +
+  scale_y_log10() +
+  xlab('') + ylab(bquote(Isoniazid~IC[50]~fold~change~WRT~untreated~controls)) +
+  scale_fill_manual(values = evolved.strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none', axis.text = element_text(size = 15))
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig2-panel-c.pdf', height = 4.5, width = 5)
+print(resistance.boxplot)
+dev.off()
+```
+
+```{r}
+# performing t-tests to check for significant differences in ic50
+llrt.strains <- c('ohrR-inhR', 'mfs1-inhR', 'ntaA-inhR')
+p.values <- list()
+adj.p.values <- list()
+for (s in 1:length(llrt.strains)) {
+  t.test <- t.test(x = isolate.metrics %>% filter(phenotype == 'wt-inhR') %>% pull(ic50.fc),
+                   y = isolate.metrics %>% filter(phenotype == llrt.strains[s]) %>% pull(ic50.fc))
+  # saving p value and bonferroni corrected p value
+  p.values[s] <- t.test$p.value
+  adj.p.values[s] <- t.test$p.value * length(llrt.strains)
+}
+t.test.data.2 <- tibble(strain.1 = 'wt', strain.2 = llrt.strains,
+                        p.value = unlist(p.values), adj.p.value = unlist(adj.p.values))
+print(t.test.data.2)
+```
+
+**Figure 2 Panel C**
+```{r}
+resistance.boxplot
+```
+
+```{r}
+# fitness boxplots
+fitness.boxplot <- ggplot(isolate.metrics, aes(x = background, y = fitness, fill = phenotype)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8) +
+  geom_point(position = position_jitterdodge(), alpha = 0.5, shape = 21) +
+  xlab('') + ylab('Relative fitness WRT untreated controls') +
+  scale_fill_manual(values = evolved.strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none', axis.text = element_text(size = 15))
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig2-panel-d.pdf', height = 4.5, width = 5)
+print(fitness.boxplot)
+dev.off()
+```
+
+```{r}
+# performing t-tests to check for significant differences in fitness
+group.1 <- c('wt-anc', 'wt-anc', 'wt-inhR', 'wt-anc', 'wt-anc')
+group.2 <- c('ohrR-anc', 'ohrR-inhR', 'ohrR-inhR', 'ntaA-inhR', 'mfs1-inhR')
+# perfoming t tests
+
+# wt-anc vs ohrR-anc
+t.test.1 <- t.test(x = isolate.metrics %>% filter(phenotype == group.1[1]) %>% pull(fitness),
+                   y = isolate.metrics %>% filter(phenotype == group.2[1]) %>% pull(fitness), alternative = 'two.sided', var.equal = F)
+# wt-anc vs ohrR-inhR
+t.test.2 <- t.test(x = isolate.metrics %>% filter(phenotype == group.1[2]) %>% pull(fitness),
+                   y = isolate.metrics %>% filter(phenotype == group.2[2]) %>% pull(fitness), alternative = 'two.sided', var.equal = F)
+# wt-inhR vs ohrR-inhR
+t.test.3 <- t.test(x = isolate.metrics %>% filter(phenotype == group.1[3]) %>% pull(fitness),
+                   y = isolate.metrics %>% filter(phenotype == group.2[3]) %>% pull(fitness), alternative = 'two.sided', var.equal = F)
+# wt-anc vs ntaA-inhR
+t.test.4 <- t.test(x = isolate.metrics %>% filter(phenotype == group.1[4]) %>% pull(fitness),
+                   y = isolate.metrics %>% filter(phenotype == group.2[4]) %>% pull(fitness), alternative = 'two.sided', var.equal = F)
+# wt-anc vs mfs1-inhR
+t.test.5 <- t.test(x = isolate.metrics %>% filter(phenotype == group.1[5]) %>% pull(fitness),
+                   y = isolate.metrics %>% filter(phenotype == group.2[5]) %>% pull(fitness), alternative = 'two.sided', var.equal = F)
+
+                   
+p.values <- list(t.test.1$p.value, t.test.2$p.value, t.test.3$p.value, t.test.4$p.value, t.test.5$p.value)                   
+t.test.data.3 <- tibble(group.1 = unlist(group.1), group.2 = unlist(group.2),
+                        p.value = unlist(p.values))
+t.test.data.3$adj.p.value <- t.test.data.3$p.value * (nrow(t.test.data.3) - 1)
+print(t.test.data.3)
+```
+
+**Figure 2 Panel D**
+```{r}
+fitness.boxplot
+```
+
+```{r}
+# now calculating averages for each strain
+group.avgs <- isolate.metrics %>% group_by(phenotype) %>%
+  summarise(avg.ic50 = mean(ic50),
+            avg.ic50.fc = mean(ic50.fc),
+            sd.ic50.fc = sd(ic50.fc), se.ic50.fc = (sd(ic50.fc) / sqrt(n())),
+            avg.fitness = mean(fitness),
+            sd.fitness = sd(fitness), se.fitness = (sd(fitness) / sqrt(n())),
+            group.size = n())
+
+resistance.fitness.plot.2 <- ggplot(isolate.metrics, aes(x = ic50.fc, y = fitness, fill = phenotype, color = phenotype)) +
+  geom_vline(xintercept = resistance.fc, linetype = 'dashed', color = 'red3') +
+  geom_vline(xintercept = lod, linetype = 'dashed', color = 'gray20') +
+  geom_point(alpha = 0.4, shape = 21) +
+  geom_errorbar(data = group.avgs, aes(x = avg.ic50.fc, y = avg.fitness,
+                                       xmin = avg.ic50.fc - se.ic50.fc, xmax = avg.ic50.fc + se.ic50.fc, 
+                                       color = phenotype), width = 0.015, alpha = 0.6) +
+  geom_errorbar(data = group.avgs, aes(x = avg.ic50.fc, y = avg.fitness,
+                                       ymin = avg.fitness - se.fitness, ymax = avg.fitness + se.fitness,
+                                       color = phenotype), width = 0.025, alpha = 0.6) +
+  geom_point(data = group.avgs, aes(x = avg.ic50.fc, y = avg.fitness), color = 'black', shape = 21, size = 3) +
+  scale_x_log10() +
+  xlab(bquote(Isoniazid~IC[50]~fold~change~WRT~untreated~controls)) + 
+  ylab('Relative fitness WRT untreated controls') +
+  scale_color_manual(values = evolved.strain.colors) +
+  scale_fill_manual(values = evolved.strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+
+# pdf(file = '../figures/figure-panels/fig2-panel-x.pdf', height = 5, width = 10)
+# print(resistance.fitness.plot.2)
+# dev.off()
+```
+
+
+**Figure 2-XX**
+```{r}
+resistance.fitness.plot.2
+```

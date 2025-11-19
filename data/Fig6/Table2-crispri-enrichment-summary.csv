@@ -1,0 +1,43 @@
+Antibiotic,Dose,Day(s),Gene Group,BP vs. CRISPRi hypergeometric test p value,Sig. BP genes,OSR vs. CRISPRi hypergeometric test p value,OSR genes,Three way overlapping genes
+INH,medium,5,Depleted,0.04501140792274329,"pyrR, inhA",NA,,
+INH,medium,5,Responder,0.04501140792274329,"pyrR, inhA",NA,,
+INH,high,5,Enriched,NA,,0.019480626950847867,"sigE, furA, devR, katG, dlaT, Rv2455c, sirA, che1, relA, Rv3197, moeB1, Rv3222c, pafA, Rv3916c",
+INH,high,5,Depleted,0.00118018550330814,"clpP2, rpoB, Rv0043c, ppnK, Rv3600c, efp, Rv2169c, inhA, rplQ, Rv0238, cinA, Rv2136c, Rv1593c, Rv1711, thrS, Rv0060, ndkA, infC, Rv3814c",0.008385116735611169,"Rv0078, Rv0135c, Rv0238, Rv0818, sigA, NA, mshD, phoY2, Rv2136c, Rv2707, Rv3780, sodA, ahpD, ahpC","Rv0238, Rv2136c"
+INH,high,5,Responder,0.02614586883227278,"katG, clpP2, fadE2, rpoB, Rv0043c, ppnK, Rv3600c, pssA, efp, Rv0247c, Rv2169c, inhA, rplQ, pafA, fbiA, Rv0238, cinA, Rv2136c, Rv1593c, Rv1711, sirA, thrS, Rv0060, ndkA, infC, Rv3814c, Rv2432c, lspA",4.2125437689841984e-4,"Rv0078, Rv0135c, Rv0238, Rv0818, sigE, furA, sigA, devR, NA, mshD, katG, dlaT, Rv2455c, phoY2, Rv2136c, sirA, che1, relA, Rv2707, Rv3197, moeB1, Rv3222c, Rv3780, sodA, ahpD, ahpC, pafA, Rv3916c","katG, pafA, Rv0238, Rv2136c, sirA"
+INH,high,10,Enriched,NA,,0.0253095818803597,"Rv0818, furA, devR, mshD, katG, Rv2455c, che1, relA, Rv3197, Rv3222c, pafA, Rv3916c",
+INH,high,10,Depleted,0.017954557450887285,"clpP2, rpoB, Rv0043c, ppnK, efp, Rv2169c, inhA, rplQ, rpmH, Rv0238, cinA, Rv2136c, Rv1711, ndkA, infC, Rv2975c",0.04685949665933718,"Rv0238, sigA, NA, NA, phoY2, Rv2136c, Rv3205c, sodA, ahpE, ahpD, ahpC, mca","Rv0238, Rv2136c"
+INH,high,10,Responder,NA,,0.0031409607280617493,"Rv0238, Rv0818, furA, sigA, devR, NA, NA, mshD, katG, Rv2455c, phoY2, Rv2136c, che1, relA, Rv3197, Rv3205c, Rv3222c, sodA, ahpE, ahpD, ahpC, mca, pafA, Rv3916c",
+EMB,high,5,Enriched,0.008613200818947035,"clpP2, hisA, hisF, adk, efp, hadA, rpsL, rplQ, Rv2728c, rpmH, ptpA, Rv0526, esxN, thyA, Rv2136c, Rv0538, Rv1711, pcaA, ftsW, thrS, ndkA, infC, cydA, Rv3814c, Rv2842c, lspA, rpsP",NA,,
+EMB,high,5,Responder,0.005086859118857257,"clpP2, rpoB, hisA, hisF, adk, efp, hadA, Rv2169c, rpsL, rplQ, Rv2728c, pafA, secD, rpmH, ptpA, Rv0364, Rv0912, Rv0526, esxN, Rv0383c, thyA, Rv2136c, Rv0538, Rv1711, pcaA, ftsW, thrS, ndkA, sigH, infC, cydA, Rv3814c, Rv2842c, lspA, rpsP",NA,,
+EMB,high,10,Enriched,0.046072549520369405,"clpP2, adk, rpsL, rplQ, Rv2728c, rpmH, esxN, Rv2136c, Rv1711, pcaA, ftsW, ndkA, infC, cydA, rpsP",NA,,
+EMB,high,10,Responder,0.026894853389395464,"clpP2, adk, Rv2169c, rpsL, rplQ, Rv2728c, pafA, secD, rpmH, Rv0364, esxN, Rv0383c, Rv2136c, Rv1711, pcaA, ftsW, ndkA, infC, cydA, rpsP",NA,,
+CLR,low,5,Enriched,0.008637935580033411,"clpP2, hisA, Rv2438A, hisG, hisD, Rv2581c",0.010528589477974156,"Rv0678, dlaT, rpsF, Rv2581c, relA",Rv2581c
+CLR,low,5,Responder,NA,,0.009757309702177355,"Rv0678, fhaB, katG, mpa, dlaT, rpsF, Rv2581c, relA, sodA",
+CLR,low,10,Enriched,1.3073192901281582e-4,"hisA, hisF, Rv2438A, hisG, hisD, Rv2581c",0.026119593773843493,"Rv0678, Rv2581c, relA",Rv2581c
+CLR,low,10,Depleted,NA,,0.004427761276504125,"Rv0818, phoP, fhaB, mshD, katG, mpa, rplS, sodA, pafA",
+CLR,low,10,Responder,0.0164574423896458,"katG, hisA, hisF, pssA, pafA, Rv2438A, hisG, mtrA, hisD, ndkA, Rv2581c",4.1285292884023656e-4,"Rv0818, phoP, Rv0678, fhaB, mshD, katG, mpa, Rv2581c, relA, rplS, sodA, pafA","katG, pafA, Rv2581c"
+CLR,medium,5,Enriched,0.025795897327596927,"hisA, hisF, Rv2438A, hisG, hisD, Rv2581c",0.006929231609334352,"Rv0678, dlaT, rpsF, phoY2, Rv2581c, relA",Rv2581c
+CLR,medium,5,Responder,NA,,0.0018520927749232782,"NA, Rv0678, fhaB, mshD, katG, mpa, dlaT, rpsF, phoY2, Rv2581c, relA, sodA",
+CLR,medium,10,Enriched,0.0028004432491924303,"hisA, hisF, hisG, mapA, hisD, Rv2581c",NA,,
+CLR,medium,10,Depleted,NA,,0.0390827533413971,"Rv0818, phoP, fhaB, mshD, katG, mpa, sodA, pafA",
+CLR,medium,10,Responder,0.01645721879323524,"katG, hisA, hisF, pssA, pafA, hisG, mtrA, mapA, Rv1711, hisD, ndkA, Rv0998, Rv2581c",0.010001697748371964,"Rv0818, phoP, Rv0678, fhaB, mshD, katG, mpa, Rv2581c, relA, sodA, pafA","katG, pafA, Rv2581c"
+CLR,high,5,Enriched,0.004980624724662749,"clpP2, hisA, hisF, Rv2438A, hisG, mapA, thrS, hisD, Rv2581c, rpsP",NA,,
+CLR,high,5,Responder,NA,,0.012130597986759901,"NA, Rv0678, fhaB, mshD, katG, mpa, dlaT, rpsF, phoY2, Rv2581c, relA, sodA",
+CLR,high,10,Enriched,0.0038213259694119856,"hisA, hisF, Rv2438A, hisG, mapA, hisD, Rv2581c",NA,,
+CLR,high,10,Responder,0.01663778353896562,"katG, hisA, hisF, pssA, efp, rplQ, Rv2438A, hisG, mtrA, mapA, Rv1711, hisD, ndkA, Rv0998, Rv2581c",NA,,
+RIF,medium,1,Depleted,0.046011253410625,"rpoB, hadA, Rv2169c, inhA, Rv0364, mtrA, Rv0383c",NA,,
+RIF,high,10,Enriched,0.019486948987784032,"rpsL, rpsP",NA,,
+STR,high,1,Enriched,0.030564091216346977,"hisA, rpmH, hisD",NA,,
+STR,high,1,Depleted,NA,,0.018034985958468495,"sigE, sigA, NA",
+STR,high,1,Responder,NA,,0.023490490835084178,"sigE, Rv1353c, sigA, NA",
+STR,high,5,Enriched,0.005129984735940189,"hisA, hisF, rpmH, Rv2438A, hisG, hisD",NA,,
+STR,high,5,Depleted,NA,,0.03077597457138439,"sigE, sigA, sodA",
+STR,high,5,Responder,0.04803316279370557,"hisA, hisF, rpmH, Rv2438A, hisG, hisD",0.0365043326529506,"sigE, Rv1353c, sigA, rplS, sodA",
+BDQ,medium,10,Enriched,NA,,0.004957704574006513,"Rv0678, rpsF",
+LZD,medium,1,Enriched,NA,,0.04036264064355694,"devR, mpa",
+LZD,medium,10,Enriched,NA,,0.015642344025398894,"mpa, Rv3673c",
+LZD,high,5,Depleted,NA,,0.008712267942849728,"fhaB, ideR, mscR, katG, phoY2, sodA",
+LZD,high,5,Responder,NA,,0.04342728392653354,"devR, phoP, fhaB, ideR, mscR, katG, mpa, phoY2, NA, Rv2581c, sodA, Rv0771",
+LZD,high,10,Responder,NA,,0.017540331420140963,"devR, phoP, ideR, katG, mpa, sodA",
+VAN,medium,5,Depleted,0.04797564897632543,"pyrR, clpP2, mmaA3, hisA, pssA, Rv2169c, inhA, secD, Rv0364, rfbE, mtrA, Rv0383c, thyA, Rv0538, ftsW, galU, ndkA, lspA",NA,,
+VAN,medium,5,Responder,0.04797564897632543,"pyrR, clpP2, mmaA3, hisA, pssA, Rv2169c, inhA, secD, Rv0364, rfbE, mtrA, Rv0383c, thyA, Rv0538, ftsW, galU, ndkA, lspA",NA,,

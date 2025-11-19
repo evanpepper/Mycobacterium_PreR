@@ -1,0 +1,148 @@
+Source,Target,TFOE log2 FC,PValue,Adj.PValue,Interaction,ChIP-seq Evidence,GO annotation,Source.rv.number,Target.rv.number,Abs TFOE log2 FC
+whiB5,Rv1776c,-0.66,9.58805e-4,0.04495963811462073,repression,NA,No association,Rv0022c,Rv1776c,0.66
+whiB5,sigM,3.19,7.17e-64,3.6318918e-60,activation,NA,No association,Rv0022c,Rv3911,3.19
+Rv0023,embR,1.16,3.13999e-4,0.017743055791292,activation,NA,No association,Rv0023,Rv1267c,1.16
+Rv0023,furA,2.73,9.23e-17,4.3314716058394163e-14,activation,NA,Target: response to oxidative stress,Rv0023,Rv1909c,2.73
+Rv0023,ideR,0.5,1.03e-5,9.253624959690422e-4,activation,NA,Target: response to oxidative stress,Rv0023,Rv2711,0.5
+Rv0023,whiB4,1.17,5.78e-17,2.754202953249715e-14,activation,NA,No association,Rv0023,Rv3681c,1.17
+Rv0078,Rv2884,-1.09,4.74807e-4,0.025220172693803625,repression,NA,No association,Rv0078,Rv2884,1.09
+Rv0081,furA,0.85,4.5243e-4,0.024202311964285714,activation,NA,Target: response to oxidative stress,Rv0081,Rv1909c,0.85
+Rv0081,Rv2884,1,1.08e-5,9.65302406159769e-4,activation,NA,No association,Rv0081,Rv2884,1
+Rv0081,whiB4,0.51,3.5e-7,4.473571647040832e-5,activation,Direct,No association,Rv0081,Rv3681c,0.51
+Rv0135c,Rv2884,-2.64,2.63e-15,1.0583198507462688e-12,repression,Direct,No association,Rv0135c,Rv2884,2.64
+Rv0238,furA,-1.45,3.01e-5,0.0023753478519497684,repression,NA,Target: response to oxidative stress,Rv0238,Rv1909c,1.45
+Rv0238,Rv2884,-1.14,6.75603e-4,0.033737402579494535,repression,NA,No association,Rv0238,Rv2884,1.14
+Rv0238,sigM,-0.75,5.12e-5,0.003773588994708995,repression,NA,No association,Rv0238,Rv3911,0.75
+Rv0576,whiB4,-2.06,1.13e-44,2.6234550833333337e-41,repression,Direct,No association,Rv0576,Rv3681c,2.06
+Rv0818,whiB4,-0.69,1.12e-6,1.2781074822501367e-4,repression,NA,No association,Rv0818,Rv3681c,0.69
+trcR,whiB4,0.63,1.31331e-4,0.008474773611874615,activation,Direct,No association,Rv1033c,Rv3681c,0.63
+sigE,ideR,0.51,1.5335e-4,0.009689918337491494,activation,NA,Target: response to oxidative stress; Source: response to oxidative stress,Rv1221,Rv2711,0.51
+Rv1255c,whiB4,-0.72,1.04e-9,2.0950172089660156e-7,repression,NA,No association,Rv1255c,Rv3681c,0.72
+embR,phoP,-0.91,6.46e-5,0.004600945769066894,repression,NA,Target: response to oxidative stress,Rv1267c,Rv0757,0.91
+Rv1353c,whiB4,-1.54,3.8700000000000004e-27,3.930147229647631e-24,repression,NA,No association,Rv1353c,Rv3681c,1.54
+Rv1776c,mshD,-0.64,3.23e-5,0.0025272467047369406,repression,NA,Target: response to oxidative stress,Rv1776c,Rv0819,0.64
+Rv1776c,pknE,-0.62,6.72e-5,0.004758549114631873,repression,NA,Target: response to nitrosative stress,Rv1776c,Rv1743,0.62
+Rv1776c,mscR,-0.64,6.27e-7,7.553199149610839e-5,repression,NA,Target: mycothiol-dependent detoxification,Rv1776c,Rv2259,0.64
+Rv1776c,htpG,-1.41,1.17601e-4,0.007714453919708029,repression,NA,Target: response to oxidative stress,Rv1776c,Rv2299c,1.41
+Rv1776c,eis,1.8,5.14e-7,6.311099955927721e-5,activation,NA,Target: response to oxidative stress,Rv1776c,Rv2416c,1.8
+furA,katG,-2.74,2.11e-34,3.132360586145648e-31,repression,NA,Target: antioxidant activity; Source: response to oxidative stress,Rv1909c,Rv1908c,2.74
+Rv2011c,ideR,-0.51,5.48e-5,0.003996627120418848,repression,NA,Target: response to oxidative stress,Rv2011c,Rv2711,0.51
+Rv2034,sigM,0.77,8.56e-8,1.2341505882352941e-5,activation,NA,No association,Rv2034,Rv3911,0.77
+sigA,Rv2884,-1.35,3.14374e-4,0.017760643492902527,repression,NA,No association,Rv2703,Rv2884,1.35
+Rv2884,Rv0799c,-0.87,9.97e-9,1.7068488877509217e-6,repression,NA,Target: antioxidant activity,Rv2884,Rv0799c,0.87
+Rv2884,Rv0944,-1.16,1.37e-5,0.0011858260874067935,repression,NA,Target: response to oxidative stress,Rv2884,Rv0944,1.16
+Rv2884,bpoB,-0.94,1.13e-9,2.2653965699208444e-7,repression,NA,Target: antioxidant activity,Rv2884,Rv1123c,0.94
+Rv2884,alkA,1.43,9.13e-7,1.0617464630582997e-4,activation,NA,Target: response to nitrosative stress,Rv2884,Rv1317c,1.43
+Rv2884,dsbF,-0.59,2.49e-7,3.275290509915015e-5,repression,NA,Target: antioxidant activity,Rv2884,Rv1677,0.59
+Rv2884,tpx,-0.74,6.4529e-4,0.032477873924485125,repression,NA,Target: antioxidant activity,Rv2884,Rv1932,0.74
+Rv2884,mpa,-0.75,2.51e-9,4.7483825486645536e-7,repression,NA,Target: response to oxidative stress,Rv2884,Rv2115c,0.75
+Rv2884,dlaT,-0.51,7.2547e-4,0.03577445847955631,repression,NA,Target: antioxidant activity,Rv2884,Rv2215,0.51
+Rv2884,mscR,-0.72,3.38e-9,6.26518868928809e-7,repression,NA,Target: mycothiol-dependent detoxification,Rv2884,Rv2259,0.72
+Rv2884,Rv2455c,-0.73,9.17442e-4,0.04337433831923077,repression,NA,Target: response to oxidative stress,Rv2884,Rv2455c,0.73
+Rv2884,Rv2464c,-0.55,5.78113e-4,0.029643045544969326,repression,NA,Target: response to oxidative stress,Rv2884,Rv2464c,0.55
+Rv2884,bcp,-0.6,9.75525e-4,0.04560039235318792,repression,NA,Target: antioxidant activity,Rv2884,Rv2521,0.6
+Rv2884,whiB4,0.62,5.63e-5,0.004094946767035071,activation,NA,No association,Rv2884,Rv3681c,0.62
+devR,Rv1776c,-0.62,5.99e-7,7.24199058295964e-5,repression,NA,No association,Rv3133c,Rv1776c,0.62
+devR,whiB4,-0.52,2.47e-8,3.963147955461701e-6,repression,NA,No association,Rv3133c,Rv3681c,0.52
+devR,sigM,-0.75,1.22e-10,2.8331898305084743e-8,repression,NA,No association,Rv3133c,Rv3911,0.75
+sigH,sigM,-0.97,7.98e-8,1.1583209760333449e-5,repression,NA,Source: response to oxidative stress,Rv3223c,Rv3911,0.97
+sigF,embR,1.19,3.32937e-4,0.018643022120259947,activation,NA,Source: response to oxidative stress,Rv3286c,Rv1267c,1.19
+sigF,furA,1.47,1.61e-5,0.0013651450847113726,activation,NA,Target: response to oxidative stress; Source: response to oxidative stress,Rv3286c,Rv1909c,1.47
+sigF,Rv2884,4.22,1.06e-38,1.87302e-35,activation,Direct,Source: response to oxidative stress,Rv3286c,Rv2884,4.22
+sigF,whiB4,1.27,1.03e-19,6.329887720588235e-17,activation,NA,Source: response to oxidative stress,Rv3286c,Rv3681c,1.27
+whiB3,furA,1.23,4.86119e-4,0.02571444491570154,activation,NA,Target: response to oxidative stress,Rv3416,Rv1909c,1.23
+whiB3,whiB4,0.96,1.6e-11,4.239903614457831e-9,activation,NA,No association,Rv3416,Rv3681c,0.96
+whiB4,phoP,1.01,1.92e-6,2.071406634826384e-4,activation,Direct,Target: response to oxidative stress,Rv3681c,Rv0757,1.01
+sigM,cysD,1.81,3.23666e-4,0.018206833342710997,activation,NA,Target: response to oxidative stress,Rv3911,Rv1285,1.81
+sigM,cysN,1.74,0.001040728,0.04804330330315918,activation,NA,Target: response to oxidative stress,Rv3911,Rv1286,1.74
+sigM,dsbF,0.48,1.34898e-4,0.008673477522732518,activation,NA,Target: antioxidant activity,Rv3911,Rv1677,0.48
+sigM,Rv1732c,0.65,2.24037e-4,0.013367226461093663,activation,NA,Target: antioxidant activity,Rv3911,Rv1732c,0.65
+sigM,pknE,0.6,1.23719e-4,0.00805195660559103,activation,NA,Target: response to nitrosative stress,Rv3911,Rv1743,0.6
+sigM,mscR,0.52,1.3208e-4,0.008518502606682615,activation,NA,Target: mycothiol-dependent detoxification,Rv3911,Rv2259,0.52
+sigH,rpsF,-1.4,4.03e-6,4.0285106207391466e-4,repression,Direct,Source: response to oxidative stress,Rv3223c,Rv0053,1.4
+phoP,hddA,0.82,0.001086989,0.04973697707757583,activation,Operon,Source: response to oxidative stress,Rv0757,Rv0115,0.82
+Rv2250c,msrA,-2.92,8.87e-29,9.977747200538357e-26,repression,Direct,Target: response to oxidative stress,Rv2250c,Rv0137c,2.92
+sigF,nadR,1.4,2.38e-10,5.287566666666667e-8,activation,Operon,Source: response to oxidative stress,Rv3286c,Rv0212c,1.4
+sigF,Rv0213c,1.2,4.17e-7,5.2346777861219586e-5,activation,Direct,Source: response to oxidative stress,Rv3286c,Rv0213c,1.2
+phoP,nirB,2.27,1.63e-19,9.879182958665699e-17,activation,Direct,Source: response to oxidative stress,Rv0757,Rv0252,2.27
+phoP,nirD,1.81,1.46e-11,3.89236e-9,activation,Operon,Source: response to oxidative stress,Rv0757,Rv0253,1.81
+Rv0465c,Rv0464c,-0.6,3.7e-6,3.7321104272266474e-4,repression,Direct,Target: antioxidant activity,Rv0465c,Rv0464c,0.6
+phoP,phoP,1.38,1.86e-19,1.1224341227436823e-16,activation,Direct,Target: response to oxidative stress; Source: response to oxidative stress,Rv0757,Rv0757,1.38
+Rv2011c,phoP,-1.46,6.04e-16,2.596799197530864e-13,repression,Direct,Target: response to oxidative stress,Rv2011c,Rv0757,1.46
+Rv2250c,phoP,-1.34,7.26e-14,2.521962867830424e-11,repression,Direct,Target: response to oxidative stress,Rv2250c,Rv0757,1.34
+sigF,Rv0759c,1.53,2.55e-10,5.629337163232963e-8,activation,Direct,Source: response to oxidative stress,Rv3286c,Rv0759c,1.53
+phoP,Rv0789c,3.23,3.6799999999999996e-47,9.795257579617833e-44,activation,Direct,Source: response to oxidative stress,Rv0757,Rv0789c,3.23
+phoP,phoY2,1.18,5.17e-26,4.927068950969213e-23,activation,Direct,Source: response to oxidative stress,Rv0757,Rv0821c,1.18
+sigF,Rv0941c,3.19,2.5799999999999998e-43,5.5575793298969064e-40,activation,Direct,Source: response to oxidative stress,Rv3286c,Rv0941c,3.19
+phoP,mazF3,-1.99,1.2099999999999999e-40,2.314203913043478e-37,repression,Direct,Source: response to oxidative stress,Rv0757,Rv1102c,1.99
+phoP,mazE3,-1.63,4.46e-13,1.4211314754098362e-10,repression,Direct,Source: response to oxidative stress,Rv0757,Rv1103c,1.63
+Rv1353c,fbiC,-2.45,2.5099999999999995e-101,3.884880388888888e-97,repression,Direct,Target: response to nitrosative stress,Rv1353c,Rv1173,2.45
+phoP,pks3,0.67,2.37e-5,0.0019248126226800116,activation,Direct,Source: response to oxidative stress,Rv0757,Rv1180,0.67
+phoP,Rv1184c,1.1,3.64e-6,3.6791380336195426e-4,activation,Direct,Source: response to oxidative stress,Rv0757,Rv1184c,1.1
+Rv0023,sigE,0.88,0.001017634,0.04721228634437968,activation,Direct,Target: response to oxidative stress,Rv0023,Rv1221,0.88
+Rv1287,cysD,1.78,5.4e-6,5.227929340901193e-4,activation,Direct,Target: response to oxidative stress,Rv1287,Rv1285,1.78
+Rv1287,cysN,1.43,7.8255e-4,0.038110257956531876,activation,Operon,Target: response to oxidative stress,Rv1287,Rv1286,1.43
+phoP,rfe,1.51,1.47e-25,1.3575831712707182e-22,activation,Direct,Source: response to oxidative stress,Rv0757,Rv1302,1.51
+Rv0081,alkA,0.69,4.37537e-4,0.023539715916768587,activation,Direct,Target: response to nitrosative stress,Rv0081,Rv1317c,0.69
+sigH,trxB1,2.94,3.57e-16,1.568755977917981e-13,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv1471,2.94
+phoP,Rv1517,1.06,6.91e-5,0.004875741502743774,activation,Direct,Source: response to oxidative stress,Rv0757,Rv1517,1.06
+phoP,Rv1518,0.7,1.32e-5,0.00114957186620819,activation,Operon,Source: response to oxidative stress,Rv0757,Rv1518,0.7
+sigH,papA4,5.07,2.8199999999999996e-151,1.4730816374999997e-146,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv1528c,5.07
+Rv0818,glbN,6.04,2.23e-90,2.3297674125e-86,activation,Direct,Target: antioxidant activity,Rv0818,Rv1542c,6.04
+sigH,Rv1875,2.67,3.86e-27,3.929541120584653e-24,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv1875,2.67
+devR,hspX,5.7,2.94e-28,3.1912019999999995e-25,activation,Direct,Target: response to oxidative stress,Rv3133c,Rv2031c,5.7
+phoP,metH,1,7.15e-16,3.0520457865168536e-13,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2124c,1
+phoP,Rv2136c,0.72,1.17e-5,0.0010332581043956044,activation,Direct,Target: response to nitrosative stress; Source: response to oxidative stress,Rv0757,Rv2136c,0.72
+phoP,mcr16-acpM,-1.57,1.14e-7,1.599734284754869e-5,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2243,1.57
+phoP,cdh,-0.83,3.42098e-4,0.01907675670656525,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2289,0.83
+phoP,Rv2331,1.03,8.60601e-4,0.04115359711585994,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2331,1.03
+phoP,mez,1.1,3.24e-5,0.0025326999999999997,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2332,1.1
+phoP,Rv2340c,-0.88,6.22e-6,5.927055090639608e-4,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2340c,0.88
+phoP,cfp2,-1,5.5e-12,1.54567938802959e-9,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2376c,1
+phoP,rpfD,0.84,1.82e-5,0.0015235773437499997,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2389c,0.84
+phoP,Rv2390c,0.8,3.24094e-4,0.018223550077637242,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2390c,0.8
+phoP,sirA,0.66,1.58032e-4,0.009930210007668597,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2391,0.66
+phoP,cysH,0.64,9.33e-5,0.00630798416922828,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2392,0.64
+phoP,che1,0.71,1.29861e-4,0.008390928105991496,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2393,0.71
+phoP,ggtB,0.77,2.37e-5,0.0019248126226800116,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2394,0.77
+Rv1990c,Rv2464c,-1.13,1.1e-14,4.1751594005449596e-12,repression,Direct,Target: response to oxidative stress,Rv1990c,Rv2464c,1.13
+sigH,Rv2466c,3.49,1.84e-19,1.111167225433526e-16,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv2466c,3.49
+sigH,pepN,0.67,6.44e-5,0.004590221763602251,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv2467,0.67
+phoP,Rv2581c,-0.52,3.61e-6,3.6523490013315576e-4,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2581c,0.52
+phoP,ppiB,-1.08,9.06593e-4,0.04296939265413406,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2582,1.08
+phoP,relA,0.48,9.14e-8,1.311438581974249e-5,activation,Operon,Source: response to oxidative stress,Rv0757,Rv2583c,0.48
+phoP,apt,0.62,2.21e-9,4.218082005023978e-7,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2584c,0.62
+phoP,fadD9,1.78,9.34e-11,2.2008141922751617e-8,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2590,1.78
+phoP,Rv2633c,-1.37,1.66116e-4,0.010363384172277376,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2633c,1.37
+sigH,Rv2707,1.03,1.58e-9,3.0882829279700654e-7,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv2707,1.03
+phoP,Rv2779c,1.87,1.61e-13,5.4019410276997183e-11,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2779c,1.87
+phoP,rplS,-0.57,5.68e-5,0.004124852619688939,repression,Direct,Source: response to oxidative stress,Rv0757,Rv2904c,0.57
+phoP,lppW,0.84,1.7e-13,5.676566919696365e-11,activation,Direct,Source: response to oxidative stress,Rv0757,Rv2905,0.84
+Rv3597c,moaD1,1.7,6.86e-9,1.2068040959797937e-6,activation,Direct,Source: response to oxidative stress,Rv3597c,Rv3112,1.7
+phoP,Rv3197,1.59,1.8e-36,2.9212112621359224e-33,activation,Direct,Source: response to oxidative stress,Rv0757,Rv3197,1.59
+sigH,Rv3205c,0.44,2.86e-6,2.9580030441777005e-4,activation,Operon,Source: response to oxidative stress,Rv3223c,Rv3205c,0.44
+sigH,moeB1,1.32,2.53e-29,2.924690497925311e-26,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv3206c,1.32
+sigH,Rv3222c,0.97,4.95e-15,1.940509122889306e-12,activation,Operon,Source: response to oxidative stress,Rv3223c,Rv3222c,0.97
+sigH,sigH,1.41,5.27e-17,2.5212470349170004e-14,activation,Direct,Target: response to oxidative stress; Source: response to oxidative stress,Rv3223c,Rv3223c,1.41
+sigH,Rv3224B,-0.89,1.76e-7,2.3868118773324678e-5,repression,Operon,Source: response to oxidative stress,Rv3223c,Rv3224B,0.89
+sigF,sigF,3.9,2.03e-81,1.6798571584158416e-77,activation,Operon,Target: response to oxidative stress; Source: response to oxidative stress,Rv3286c,Rv3286c,3.9
+sigF,rsbW,2.72,1.4099999999999999e-61,6.510858066298342e-58,activation,Direct,Source: response to oxidative stress,Rv3286c,Rv3287c,2.72
+phoP,Rv3312A,-1.13,3.47e-9,6.414940875912408e-7,repression,Direct,Source: response to oxidative stress,Rv0757,Rv3312A,1.13
+sigH,Rv3350c,0.84,8.27e-5,0.005686074012833169,activation,Direct,Source: response to oxidative stress,Rv3223c,Rv3350c,0.84
+phoP,yrbE4B,-1.08,1.03e-5,9.253624959690422e-4,repression,Operon,Source: response to oxidative stress,Rv0757,Rv3500c,1.08
+phoP,yrbE4A,-0.82,2.8616e-4,0.016401724904677,repression,Direct,Source: response to oxidative stress,Rv0757,Rv3501c,0.82
+Rv0081,kshB,0.87,1.52e-7,2.0850193993106845e-5,activation,Direct,Target: response to nitrosative stress,Rv0081,Rv3571,0.87
+Rv0678,kshB,1.49,4.32e-12,1.2310320900102285e-9,activation,Direct,Target: response to nitrosative stress,Rv0678,Rv3571,1.49
+Rv0324,Rv3597c,-1.18,3.59e-16,1.5758874422268908e-13,repression,Direct,Target: response to oxidative stress,Rv0324,Rv3597c,1.18
+Rv3597c,Rv3597c,0.95,4.51e-6,4.461905078125e-4,activation,Direct,Target: response to oxidative stress; Source: response to oxidative stress,Rv3597c,Rv3597c,0.95
+Rv1049,ftsH,-0.4,0.001079568,0.04946782994999999,repression,Direct,Target: response to oxidative stress,Rv1049,Rv3610c,0.4
+Rv0081,Rv3673c,-0.31,8.20214e-4,0.03956640189737966,repression,Operon,Target: antioxidant activity,Rv0081,Rv3673c,0.31
+Rv0678,Rv3673c,-0.91,6.13e-16,2.631432372881356e-13,repression,Operon,Target: antioxidant activity,Rv0678,Rv3673c,0.91
+phoP,Rv3750c,-0.95,1.17e-10,2.7269254601226996e-8,repression,Direct,Source: response to oxidative stress,Rv0757,Rv3750c,0.95
+phoP,Rv3767c,0.91,8.75e-8,1.2598055555555557e-5,activation,Direct,Source: response to oxidative stress,Rv0757,Rv3767c,0.91
+phoP,Rv3768,-1.99,4.46e-13,1.4211314754098362e-10,repression,Direct,Source: response to oxidative stress,Rv0757,Rv3768,1.99
+phoP,Rv3779,-1.54,5.37e-19,3.0804376595744683e-16,repression,Direct,Source: response to oxidative stress,Rv0757,Rv3779,1.54
+phoP,Rv3780,-0.48,3.49865e-4,0.01945147463679904,repression,Operon,Source: response to oxidative stress,Rv0757,Rv3780,0.48
+phoP,pks2,0.98,5.34e-10,1.1253464296520424e-7,activation,Direct,Source: response to oxidative stress,Rv0757,Rv3825c,0.98
+sigH,trxB2,2.21,2.6e-15,1.0487724903474903e-12,activation,Direct,Target: antioxidant activity; Source: response to oxidative stress,Rv3223c,Rv3913,2.21
+sigH,trxC,1.28,6.7e-5,0.004745995169082126,activation,Operon,Source: response to oxidative stress,Rv3223c,Rv3914,1.28

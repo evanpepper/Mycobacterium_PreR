@@ -1,0 +1,1406 @@
+---
+title: "Figure 6 Notebook: Statistical Analysis of Public Mtb Genomes and generation of Oxidative Stress Response (OSR) Network"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the variants identified in the Mtb clinical isolate dataset using a Bayesian probability framework and temporal analysis of Mtb evolution in the context of drug resistance mutations. This dataset includes isolates from: Silcocks et al. 2023
+
+WGS data was processed and analyzed using an adaptation of the variant calling pipeline from Liu et al. 2022, which can be found at: https://github.com/baliga-lab/bwa_pipeline. Details on specific pipeline parameters for calling mutations and use of TB-Profiler can be found in the Methods section.
+
+Two important files analyzed here are not included in the public distribution of this work. **Both of these files will be needed to run the code in this notebook.** The files are as follows:
+1. Phenotypic drug susceptibility profiles of Mtb strains analyzed in this work. This data can be made available upon request.
+2. CRISPRi strains during various drug treatments from S. Li et. al. 2022. This Source Data Fig. 1 from this publication and can be downloaded at: 10.1038/s41564-022-01130-y
+
+**Important note: to run notebook, user's computer must have ≥ 10.0 GB memory**
+
+```{r}
+# importing necessary libraries
+suppressMessages(
+  {
+  library(ggplot2)
+  library(ggridges)
+  library(ggupset)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+  library(ggrepel)
+  library(see)
+  library(viridis)
+  library(seqinr)
+  library(Biostrings)
+  }
+)
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 10),
+                    legend.text = element_text(size = 8),
+                    strip.text = element_text(size = 10))
+```
+
+```{r}
+#################################################################################
+# writing a function to calculate bayes probability
+calculateBayes <- function(total.n, total.n.with.a, total.n.with.b, total.n.with.a.and.b) {
+  # Calculate the conditional probability P(A|B)
+  bayes.prob <- total.n.with.a.and.b / total.n.with.b
+  return(bayes.prob)
+}
+# function for using apply to get bayes probs for each locus
+calculateMetrics <- function(count.table, phenotypes) {
+  # Get the sample IDs with mutations (non-zero counts)
+  isomut <- colnames(count.table)[apply(count.table, 2, function(x) any(x > 0))]
+  isolate.with.mutation.n <- length(isomut)
+  # Get the count of resistant isolates with mutations
+  R.isolate.n.with.mutation <- sum(resistant_isolates %in% isomut)
+  # Calculate the Bayes probability
+  bayes.prob <- calculateBayes(isolate.n, R.isolate.n, isolate.with.mutation.n, R.isolate.n.with.mutation)
+  return(bayes.prob)
+}
+# function for converting matrix of isolate IDs and mutations to wide form
+flattenCounts <- function(isolate.locus.matrix) {
+  # transforming table to wide form with SNP occurances
+  count.table.wide <- isolate.locus.matrix %>%
+    group_by(Sample.ID, Locus) %>%
+    summarise(n = n(), .groups = 'drop') %>%
+    pivot_wider(names_from = Sample.ID, values_from = n, values_fill = list(n = 0))
+  # convert to dataframe
+  count.table.wide <- as.data.frame(count.table.wide)
+  count.table.wide <- count.table.wide[complete.cases(count.table.wide), ]
+  # set rownames and remove locus column
+  rownames(count.table.wide) <- count.table.wide$Locus
+  count.table.wide <- count.table.wide %>% dplyr::select(-Locus)
+  return(count.table.wide)
+}
+#################################################################################
+```
+
+```{r}
+# reading in metadata for clinical isolates with variants called
+# THIS PHENOTYPES FILE CAN BE AVAILABLE UPON REQUEST
+phenotypes <- read_csv(file = '../data-public-upon-request/dst-isolate-phenotypes.csv')
+genotypes <- read_csv(gzfile('../data/Fig6/dst-isolates/dst-isolate-locus-matrix.csv.gz'))
+names(genotypes) <- c('Sample.ID', 'Locus')
+# insuring phenotype data only contains samples with variant data
+phenotypes <- phenotypes %>% filter(Sample.ID %in% unique(genotypes$Sample.ID))
+mtb.gene.map <- read_csv(file = '../data/genome-annotations/mtb-h37rv-full-genome-annotation.csv', show_col_types = FALSE)
+gene.name.conversion.table <- read_csv(file = '../data/genome-annotations/gene-locus-map.csv')
+
+# removing outlier from phylogeny analysis
+outlier.id <- phenotypes %>% filter(major.lineage == 8) %>% pull(Sample.ID)
+phenotypes <- phenotypes %>% filter(Sample.ID != outlier.id)
+genotypes <- genotypes %>% filter(Sample.ID != outlier.id)
+```
+
+```{r}
+# getting summary of lineages and resistance profiles for plotting
+# generating bar plot of sizes of each lineage
+phenotypes$major.lineage <- factor(phenotypes$major.lineage, levels = c(1, 2, 4))
+lineages.summarized <- phenotypes %>% group_by(major.lineage) %>% tally() %>% filter(!is.na(major.lineage))
+```
+
+```{r}
+# lineage counts
+lineage.counts <- ggplot(lineages.summarized, aes(x = major.lineage, y = n, fill = major.lineage)) +
+  geom_bar(stat = "identity", color = 'black') +
+  geom_text(aes(label = n), nudge_y = 0.25, size = 5) +
+  scale_y_log10() +
+  xlab('Major Lineage') + ylab('Sample Count') +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+
+pdf(file = '../figures/figure-panels/fig6-panel-a.pdf', height = 4, width = 3)
+print(lineage.counts)
+dev.off()
+```
+
+**Figure 6 Panel A**
+```{r}
+lineage.counts
+```
+
+```{r}
+# preparing data from genotype calls to make summary figure for mutations in dataset
+full.genotype.calls <- read_csv(gzfile('../data/Fig6/dst-isolates/dst-isolate-genotypes-all-pipelines-filtered.csv.gz'))
+# full.genotype.calls <- read_csv(gzfile('../data/Fig6/dst-isolates/dst-isolate-genotypes.csv.gz'))
+# cleaning up effect column for summarizing
+full.genotype.calls.effect.change <- full.genotype.calls %>%
+  filter(EFFECT %in% c('Intergenic', 'Nonsynonymous')) %>%
+  mutate(EFFECT = case_when(EFFECT == 'Intergenic' ~ 'INTERGENIC',
+                            EFFECT == 'Nonsynonymous' ~ 'NONSYNONYMOUS'))
+
+full.genotypes <- rbind(full.genotype.calls %>% filter(!EFFECT %in% c('Intergenic', 'Nonsynonymous', 'EXON',
+                                                                      'GENE_FUSION', 'GENE_FUSION_REVERESE')),
+                        full.genotype.calls.effect.change)
+full.genotypes <- full.genotypes %>%
+  mutate(EFFECT = case_when(EFFECT == 'CODON_CHANGE_PLUS_CODON_DELETION' ~ 'INFRAME\nDELETION',
+                            EFFECT == 'CODON_CHANGE_PLUS_CODON_INSERTION' ~ 'INFRAME\nINSERTION',
+                            EFFECT == 'CODON_DELETION' ~ 'INFRAME\nDELETION',
+                            EFFECT == 'CODON_INSERTION' ~ 'INFRAME\nINSERTION',
+                            EFFECT == 'FRAME_SHIFT' ~ 'FRAME SHIFT',
+                            EFFECT == 'NON_SYNONYMOUS_CODING' ~ 'MISSENSE',
+                            EFFECT == 'NONSYNONYMOUS' ~ 'MISSENSE',
+                            EFFECT == 'INTERGENIC' ~ 'INTERGENIC',
+                            EFFECT == 'START_LOST' ~ 'START LOST',
+                            EFFECT == 'STOP_GAINED' ~ 'STOP GAINED',
+                            EFFECT == 'STOP_LOST' ~ 'STOP LOST'
+                            ))
+# tallying up calls for manuscript
+n.fixed <- nrow(full.genotypes %>% filter(FREQ >= 90))
+n.unfixed <- nrow(full.genotypes %>% filter(FREQ < 90))
+
+n.nonsyn <- nrow(full.genotypes %>% filter(EFFECT != 'INTERGENIC'))
+n.intergenic <- nrow(full.genotypes %>% filter(EFFECT == 'INTERGENIC'))
+# to identify XX fixed and YY unfixed (at least 10% alternative allele frequency) mutations (XX intergenic and YY nonsynonymous protein-coding mutations) across 5,233 genomic loci within each sample
+print(paste('We identified ', n.fixed, ' fixed mutations and ', n.unfixed, ' unfixed mutations', sep = ''))
+print(paste('Across all variants, ', n.intergenic, ' were intergenic and ', n.nonsyn, ' were nonsynonymous', sep = ''))
+```
+
+```{r}
+# creating figure 6 panel c
+# summary of mutations in dataset
+variant.summary.data <- full.genotypes %>%
+  group_by(EFFECT) %>% tally() %>% arrange(desc(n))
+variant.summary.data <- variant.summary.data %>%
+  mutate(EFFECT = fct_reorder(EFFECT, -n))
+
+variant.summary <- ggplot(variant.summary.data, aes(x = EFFECT, y = n)) +
+  geom_bar(stat = "identity", color = 'black', fill = 'NA') +
+  geom_text(aes(label = n), nudge_y = 0.25, size = 4) +
+  scale_y_log10() +
+  xlab('') + ylab('Variant Count') +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 45, size = 8))
+
+pdf(file = '../figures/figure-panels/fig6-panel-c.pdf', height = 4.4, width = 5)
+print(variant.summary)
+dev.off()
+```
+
+
+**Figure 6 Panel C**
+```{r}
+variant.summary
+```
+
+```{r}
+# preparing data for upset plot for RIPE (RIF, INH, PZA, EMB)
+# selecting columns of interest
+status.data <- phenotypes %>%
+  select(Sample.ID, Rifampicin, Isoniazid, Ethambutol, Streptomycin)
+# making sure all values are either 1 or 0 (no NAs)
+status.data <- replace(status.data, is.na(status.data), 0)
+# creating vector of unique sample names
+sample.ids <- status.data$Sample.ID
+# creating a vector of all antibiotic names
+abxs <- colnames(status.data[, 2:ncol(status.data)])
+# for loop for getting abx name for all row values = 1 for each sample
+sample.spectrums <- list()
+for (i in 1:length(status.data$Sample.ID)) {
+  spectrum.list <- list()
+  sample <- status.data[i, 2:ncol(status.data)]
+  if (sum(sample) == 0) {
+    spectrum.list[i] <- NA
+  }
+  else {
+    for (k in 1:length(abxs)) {
+      if (sample[k] == 1) {
+        spectrum.list[k] <- abxs[k]
+      }
+    }
+  }
+  
+  sample.spectrums[[i]] <- unlist(spectrum.list)
+}
+# add list of resistance spectrum for each isolate to data as a new column
+status.data$spectrum <- sample.spectrums
+```
+
+```{r}
+# making upset plot
+status.data.filtered <- status.data %>% distinct(Sample.ID, .keep_all = TRUE)
+status.data.tally <- status.data.filtered %>% group_by(spectrum) %>% tally() %>% arrange(desc(n))
+status.data.tally$spectrum <- unlist(lapply(status.data.tally$spectrum, function(x) ifelse(is.null(x), NA, x)))
+
+write_csv(status.data.tally, file = '../data/Fig6/susceptibility-profile-counts.csv')
+
+upset.plot <- ggplot(status.data.filtered, aes(x = spectrum)) +
+  geom_bar(fill = 'tomato4', color = 'black') +
+  scale_x_upset(n_intersections = 8) +
+  scale_y_log10() +
+  xlab('') + ylab('') +
+  theme_minimal() +
+  theme_combmatrix(combmatrix.label.text = element_text(size = 12),
+                   combmatrix.panel.point.color.fill = "tomato3",
+                   combmatrix.panel.point.size = 5,
+                   combmatrix.panel.line.size = 0) +
+  plot.theme
+
+pdf(file = '../figures/figure-panels/fig6-panel-b.pdf', height = 3.75, width = 6)
+print(upset.plot)
+dev.off()
+```
+
+
+**Figure 4 Panel B**
+```{r}
+upset.plot
+```
+
+```{r}
+# creating mutation counts for multi-locus sites
+# each for loop checks for a unique combination of loci using 'and' / 'or' logic
+genotype.isolates <- unique(genotypes$Sample.ID)
+# mshA or mshC
+sample.id.calls.1 <- list()
+for (g in 1:length(genotype.isolates)) {
+  isolate.data <- genotypes %>% filter(Sample.ID == genotype.isolates[g])
+  if ('mshA' %in% isolate.data$Locus | 'mshC' %in% isolate.data$Locus) {
+     sample.id.calls.1[[g]] <- tibble(Sample.ID = isolate.data$Sample.ID[1], Locus = 'mshA|mshC')
+  }
+  else {
+    next
+  }
+}
+extra.genotype.calls.1 <- do.call(rbind, sample.id.calls.1)
+# mshA or mshB or mshC or mshD
+sample.id.calls.2 <- list()
+for (g in 1:length(genotype.isolates)) {
+  isolate.data <- genotypes %>% filter(Sample.ID == genotype.isolates[g])
+  if ('mshA' %in% isolate.data$Locus | 'mshB' %in% isolate.data$Locus | 'mshC' %in% isolate.data$Locus | 'mshD' %in% isolate.data$Locus) {
+    sample.id.calls.2[[g]] <- tibble(Sample.ID = isolate.data$Sample.ID[1], Locus = 'mshA|mshB|mshC|mshD')
+  }
+  else {
+    next
+  }
+}
+extra.genotype.calls.2 <- do.call(rbind, sample.id.calls.2)
+
+# binding to existing genotype data
+genotypes <- rbind(genotypes, extra.genotype.calls.1, extra.genotype.calls.2) %>% arrange(Sample.ID)
+```
+
+```{r}
+# calculating bayes probabilities and using output from NullBayesGlobal.R to read in null distributions for p value calculation
+isolate.n <- nrow(phenotypes)
+#################################################################################
+# flattening SNP data to prepare for calculations
+print('widening data (global)')
+system.time(snp.data.wide <- flattenCounts(genotypes))
+print('data widened (global)')
+#################################################################################
+# setting major values
+# Get the sample IDs of isolates that are resistant to Isoniazid
+resistant_isolates <- phenotypes %>%
+  filter(Sample.ID %in% colnames(snp.data.wide) & Isoniazid == 1) %>%
+  pull(Sample.ID)
+R.isolate.n <- length(resistant_isolates)
+#################################################################################
+print('computing bayes probabilities (global)')
+system.time(bayes <- data.frame(sapply(1:nrow(snp.data.wide), function(x){ calculateMetrics(snp.data.wide[x, ], phenotypes) })))
+print('done computing bayes probabilities (global)')
+names(bayes) <- 'bayes'
+bayes$locus <- rownames(snp.data.wide)
+bayes <- bayes %>% arrange(desc(bayes))
+write_csv(bayes, file = '../data/Fig6/LDF/bayes-probabilities/INH-Global.csv')
+#################################################################################
+```
+
+```{r}
+bayes <- read_csv(file = '../data/Fig6/LDF/bayes-probabilities/INH-Global.csv', show_col_types = FALSE)
+path.to.nulls <- '../data/Fig6/LDF/bayes-null-distributions/INH-global'
+# aggregating null distribution data
+null.files <- list.files(path = path.to.nulls)
+null.dists <- list()
+print('reading in nulls (global)')
+# for (i in 1:5000) {
+for (i in 1:length(null.files)) {
+  null.dists[[i]] <- read_csv(file = paste(path.to.nulls, '/', null.files[i], sep = ''), show_col_types = FALSE)
+}
+null.bayes <- do.call(rbind, null.dists)
+print('done reading in all nulls (global)')
+```
+
+```{r}
+# visualizing null distributions
+distributions <- ggplot(bayes, aes(x = bayes)) +
+  geom_histogram(binwidth = 0.004, fill = 'red', alpha = 0.8) +
+  geom_density(data = null.bayes, aes(x = bayes), fill = 'black', alpha = 0.4) +
+  geom_vline(xintercept = min(null.bayes$bayes), linetype = 'dashed') +
+  geom_vline(xintercept = max(null.bayes$bayes), linetype = 'dashed') +
+  geom_vline(xintercept = mean(null.bayes$bayes)) +
+  annotate(geom = 'text', x = (mean(null.bayes$bayes) + 0.05), y = (length(null.files) / 25),
+           label = paste('mean\n', round(mean(null.bayes$bayes), digits = 4), sep = '')) +
+  xlab('Bayes Probabilities') + ylab('') +
+  ggtitle(paste('Bayes Probabilities for INH resistance (red)\nNull probability distribution, Global DST isolates,\n', length(null.files), ' iterations (black)', sep = '')) +
+  theme_minimal() +
+  plot.theme
+```
+
+```{r}
+distributions
+```
+
+
+```{r}
+# generating p values for bayes probabilities
+p.values <- list()
+for (b in 1:nrow(bayes)) {
+  locus <- bayes[b, ]
+  bayes.value <- locus$bayes
+  # getting p value by comparing bayes probability to the null distribution
+  # how many values in the null are smaller than the calculated bayes probability
+  n.null.less.than <- length(which(null.bayes$bayes < bayes.value))
+  # case when bayes probability is less than all null values
+  if (n.null.less.than == 0) {
+    p.value <- 1
+  }
+  else {
+    # p value is equal to 1 minus the proportion of all random bayes values less than computed bayes value 
+    p.value <- 1 - ( n.null.less.than / nrow(null.bayes) )
+  }
+  p.values[b] <- p.value
+}
+# adding p values back to data
+bayes$p.value <- unlist(p.values)
+bayes$adj.p.value <- p.adjust(bayes$p.value, method = 'fdr')
+write_csv(bayes, file = '../data/Fig6/LDF/bayes-probabilities/INH-Global-PValues.csv')
+
+info.table <- tibble(lineage = 'Global',
+                     n.isolates = isolate.n,
+                     n.inhR.isolates = R.isolate.n,
+                     prop.inhR = (R.isolate.n / isolate.n),
+                     mean.null = mean(null.bayes$bayes),
+                     n.significant.loci = nrow(bayes %>% filter(adj.p.value <= 0.01)))
+```
+
+Reading in calculated bayes probabilities with p values
+
+```{r}
+bayes <- read_csv(file = '../data/Fig6/LDF/bayes-probabilities/INH-Global-PValues.csv', show_col_types = FALSE)
+```
+
+Creating part of Figure 6D
+
+```{r}
+ridges <- ggplot(bayes, aes(x = bayes)) +
+  geom_density(alpha = 0.2, fill = 'black', linewidth = 0.25) +
+  #scale_fill_manual(values = c('black', '#f37066', '#c9942c', '#76ac42', '#14b360')) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0), breaks = scales::pretty_breaks(n = 10)) +
+  theme_minimal() +
+  xlab('') + ylab('') +
+  theme(legend.position = 'none')
+
+pdf(file = '../figures/figure-panels/fig6-panel-d.pdf', height = 3.75, width = 6)
+print(ridges)
+dev.off()
+```
+
+
+**Figure 6 Panel D**
+```{r}
+ridges
+```
+
+```{r}
+# Creating density plot for null distribution to overlay
+null.bayes.sample <- sample_n(null.bayes, 100000, replace = F)
+significance.threshold <- tail(bayes %>% filter(adj.p.value <= 0.05), n = 1) %>% pull(bayes)
+
+null <- ggplot(null.bayes.sample, aes(x = bayes)) +
+  geom_density(linewidth = 0.5, linetype = 'dashed', color = 'gray50', fill = 'NA') +
+  geom_vline(xintercept = info.table$mean.null, linetype = 'dashed', color = 'black', alpha = 0.5) +
+  geom_vline(xintercept = significance.threshold, linetype = 'dashed', color = 'red', alpha = 0.5) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0), breaks = scales::pretty_breaks(n = 10), limits = c(0, 1)) +
+  theme_minimal() +
+  xlab('') + ylab('') +
+  theme(legend.position = 'none',
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 0),
+        axis.text.y = element_text(size = 0))
+
+pdf(file = '../figures/figure-panels/fig6-panel-d-null.pdf', height = 2, width = 6)
+print(null)
+dev.off()
+```
+
+Assessing Bayes probabilities amongst loci known or likely to be associated INH resistance.
+Loci included in analysis are from: 10.1128/microbiolspec.mgm2-0014-2013
+
+```{r}
+# creating list of INH resistance associated loci
+inhR.loci.list <- c('oxyR-ahpC', 'Rv2427A-Rv2428',
+                    'ahpC', 'Rv2428',
+                    'oxyR', 'Rv2427A',
+                    'furA', 'Rv1909c',
+                    'katG', 'Rv1908c',
+                    'furA-katG', 'katG-furA', 'Rv1909c-Rv1908c', 'Rv1908c-Rv1909c',
+                    'fabG-inhA', 'inhA-fabG', 'Rv1483-Rv1484', 'Rv1484-Rv1483',
+                    'inhA', 'Rv1484',
+                    'kasA', 'Rv2245',
+                    'ndh', 'Rv1854c',
+                    'ndhA', 'Rv0392c',
+                    'iniB', 'Rv0341',
+                    'iniA', 'Rv0342',
+                    'iniC', 'Rv0343',
+                    'Rv0340',
+                    'nat', 'Rv3566c',
+                    'Rv1592c',
+                    'fadE24', 'Rv3139',
+                    'Rv1772',
+                    'efpA', 'Rv2846c',
+                    'fabD', 'Rv2243',
+                    'accD6', 'Rv2247',
+                    'fbpC', 'Rv0129c')
+
+bayes.inhR.loci <- bayes %>% filter(locus %in% inhR.loci.list)
+
+```
+
+Also assessing if there is an enrichment of intergenic loci amongst the significant Bayes probabilities
+
+```{r}
+# getting list of all loci with mutations to get population size and population successes
+all.loci <- unique(bayes$locus)
+n.total <- length(all.loci)
+n.intergenic.total <- length(all.loci[grepl('-', all.loci)])
+# getting sample size and sample successes
+n.significant.loci <- length(unique(bayes %>% filter(adj.p.value <= 0.05) %>% pull(locus)))
+n.significant.genic.loci <- length(unique(bayes[!grepl('-', bayes$locus), ] %>% filter(adj.p.value <= 0.05) %>% pull(locus)))
+n.significant.intergenic.loci <- length(unique(bayes[grepl('-', bayes$locus), ] %>% filter(adj.p.value <= 0.05) %>% pull(locus)))
+
+# performing hypergeometric test to calculate significance of enrichment of intergenic loci amonst significant hits
+p.value <- phyper(q = (n.significant.intergenic.loci - 1),
+                  m = n.intergenic.total,
+                  n = ( n.total - n.intergenic.total ),
+                  k = n.significant.loci,
+                  lower.tail = FALSE)
+print(paste('hypergeometric test p value for enrichment of intergenic loci amongst significant hits = ', p.value, sep = ''))
+```
+
+Next, performing analysis on overlap of genes enriched or depleted in the following genome-wide study:
+S. Li et. al. 2022: https://doi.org/10.1038/s41564-022-01130-y (CRISPRi)
+
+File "li-et-al-2022-table-SD-F1.xlsx" below is the Source Data Fig. 1 file from the above publication. Please download this file and save it as the same name to run this code.
+
+```{r}
+# performing hypergeometric tests to look for over-representation of significant BP genes enriched/depleted in CRISPRi data
+# first converting gene names in bayes probabilities to Rv numbers
+bayes.genic <- bayes[!grepl('-', bayes$locus), ]
+bayes.genic <- left_join(bayes.genic, gene.name.conversion.table)
+# importing CRISPRi gene enrichment/depletion data from Supplemental Data 2
+treatments <- c('BDQ 1d', 'BDQ 5d', 'BDQ 10d', 'CLR 1d', 'CLR 5d', 'CLR 10d', 'EMB 1d', 'EMB 5d', 'EMB 10d', 'INH 1d', 'INH 5d', 'INH 10d', 'LVX 1d', 'LVX 5d', 'LVX 10d',
+                'LZD 1d', 'LZD 5d', 'LZD 10d', 'RIF 1d', 'RIF 5d', 'RIF 10d', 'STR 1d', 'STR 5d', 'VAN 1d', 'VAN 5d', 'VAN 10d')
+sheets <- c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 29)
+
+crispri.enrichment.test.list <- list()
+
+for (d in 1:length(treatments)) {
+  treatment <- treatments[d]
+  selected.sheet <- sheets[d]
+  
+  crispri.data <- readxl::read_excel(path = '../data-public-upon-request/li-et-al-2022-table-SD-F1.xlsx', sheet = selected.sheet)
+  
+  crispri.data$`locus tag` <- paste('Rv', unlist(lapply(strsplit(unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 1)), 'RVBD'), '[', 2)), sep = '')
+  crispri.data[crispri.data == 'RvNA'] <- NA
+  crispri.data$`gene name` <- unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 2))
+  crispri.data <- crispri.data %>% filter(`locus tag` %in% mtb.gene.map$locus)
+  # high dose columns
+  crispri.data.high <- crispri.data[, c(1, 22, 23, 26, 27, 28, 29)]
+  names(crispri.data.high) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+  # med dose columns
+  crispri.data.med <- crispri.data[, c(1, 14, 15, 18, 19, 28, 29)]
+  names(crispri.data.med) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+  # low dose columns
+  crispri.data.low <- crispri.data[, c(1, 6, 7, 10, 11, 28, 29)]
+  names(crispri.data.low) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+
+  experiment.groups <- list(crispri.data.high, crispri.data.med, crispri.data.low)
+  experiment.conds <- c('high', 'medium', 'low')
+  crispri.hyper.tests.per.dose <- list()
+  for (e in 1:length(experiment.groups)) {
+    crispri.data.select <- experiment.groups[[e]]
+    dose <- experiment.conds[e]
+    # filtering bayes genes and enrichment/depletion data genes to only include genes that exist in both datasets
+    overlapping.genes <- intersect(x = bayes.genic$rv.number, y = mtb.gene.map$locus)
+    # filtering both datasets
+    crispri.data.filtered <- crispri.data.select %>% filter(`locus tag` %in% unique(overlapping.genes))
+    bayes.filtered <- bayes.genic %>% filter(rv.number %in% unique(crispri.data.filtered$`locus tag`))
+    # getting population size for downstream hypergeometric tests
+    population.size <- nrow(bayes.filtered)
+    # getting mean and standard deviation of bayes distribution
+    mean.bayes <- mean(bayes.filtered$bayes)
+    sd.bayes <- sd(bayes.filtered$bayes)
+
+    sig.genes <- bayes.filtered %>% filter(adj.p.value <= 0.05)
+    # bayes.subset <- sig.genes[1:(nrow(sig.genes) * bayes.percentile), ]
+    # getting input values for hypergeometric test
+    # extracting list of significant genes (bayes)
+    top.bayes.genes <- sig.genes$rv.number
+    sample.size <- length(top.bayes.genes)
+    #################################################################################
+    # hypergeometric test for all significant genes from crispri
+    # extracting list of significant genes (crispri)
+    crispri.significant.genes <- unique(rbind(crispri.data.filtered %>%
+                                                filter(`pos l2fc` >= 1, `pos fdr` <= 0.01),
+                                              crispri.data.filtered %>%
+                                                filter(`neg l2fc` <= -1, `neg fdr` <= 0.01)) %>% pull(`locus tag`))
+    population.successes <- length(crispri.significant.genes)
+    sample.successes <- length(intersect(x = top.bayes.genes, y = crispri.significant.genes))
+    # saving results of hypergeometric test
+    hyper.all <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Responder',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.significant.bayes.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = top.bayes.genes, y = crispri.significant.genes)))
+    #################################################################################
+    # hypergeometric test only for genes with alleviating or enriched interactions
+    crispri.up.genes <- unique(crispri.data.filtered %>%
+                                 filter(`pos l2fc` >= 1, `pos fdr` <= 0.01) %>% pull(`locus tag`))
+    population.successes <- length(crispri.up.genes)
+    sample.successes <- length(intersect(x = top.bayes.genes, y = crispri.up.genes))
+    hyper.up <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Enriched',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.significant.bayes.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = top.bayes.genes, y = crispri.up.genes)))
+    #################################################################################
+    # hypergeometric test only for genes with aggravating or depleted interactions
+    crispri.down.genes <- unique(crispri.data.filtered %>%
+                                   filter(`neg l2fc` <= -1, `neg fdr` <= 0.01) %>% pull(`locus tag`))
+    population.successes <- length(crispri.down.genes)
+    sample.successes <- length(intersect(x = top.bayes.genes, y = crispri.down.genes))
+    hyper.down <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Depleted',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.significant.bayes.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = top.bayes.genes, y = crispri.down.genes)))
+
+    # aggregating all data from three hypergeometric tests
+    hyper.tests <- rbind(hyper.all, hyper.up, hyper.down)
+    hyper.tests$treatment <- paste(dose, ' dose ', treatment, sep = '')
+    crispri.hyper.tests.per.dose[[e]] <- hyper.tests
+  }
+  # putting together all hypergeometric tests for CRISPRi
+  crispri.hyper.tests <- do.call(rbind, crispri.hyper.tests.per.dose)
+  crispri.enrichment.test.list[[d]] <- crispri.hyper.tests
+}
+
+crispri.enrichment.tests <- do.call(rbind, crispri.enrichment.test.list)
+crispri.enrichment.tests.filtered <- crispri.enrichment.tests %>% filter(hyper.test.p.value <= 0.05)
+```
+
+```{r}
+bayes.crispri.enrichment <- crispri.enrichment.tests.filtered
+bayes.crispri.enrichment$overlapping.genes <- sapply(bayes.crispri.enrichment$overlapping.genes, function(x) paste(x, collapse = ', '))
+write_csv(bayes.crispri.enrichment, file = '../data/Fig6/bayes-enrichment-in-crispri.csv')
+```
+
+
+```{r}
+# creating volcano plot from Li et al. 2022, Figure 1C, to show overlap of genes with high Bayes probability
+# this will also be Figure 6 Panel E
+crispri.data <- readxl::read_excel(path = '../data-public-upon-request/li-et-al-2022-table-SD-F1.xlsx', sheet = 13)
+
+crispri.data$`locus tag` <- paste('Rv', unlist(lapply(strsplit(unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 1)), 'RVBD'), '[', 2)), sep = '')
+crispri.data[crispri.data == 'RvNA'] <- NA
+crispri.data$`gene name` <- unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 2))
+crispri.data <- crispri.data %>% filter(`locus tag` %in% mtb.gene.map$locus)
+# high dose columns
+crispri.data.high <- crispri.data[, c(1, 22, 23, 26, 27, 28, 29)]
+names(crispri.data.high) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+# separating enriched and depleted data
+pos.data <- crispri.data.high %>% dplyr::select(`pos l2fc`, `pos fdr`, `locus tag`, `gene name`)
+pos.data$l2fc <- pos.data$`pos l2fc`
+pos.data$log.10.fdr <- ( 1 * log10(pos.data$`pos fdr`) )
+pos.data$Significance <- ifelse(pos.data$l2fc >= 1 & pos.data$log.10.fdr <= -2, 'Enriched', 'Not significant')
+pos.data <- pos.data[!is.na(pos.data$Significance), ]
+# repeating steps for depleted data
+neg.data <- crispri.data.high %>% dplyr::select(`neg l2fc`, `neg fdr`, `locus tag`, `gene name`)
+neg.data$l2fc <- neg.data$`neg l2fc`
+neg.data$log.10.fdr <- ( 1 * log10(neg.data$`neg fdr`) )
+neg.data$Significance <- ifelse(neg.data$l2fc <= -1 & neg.data$log.10.fdr <= -2, 'Depleted', 'Not significant')
+neg.data <- neg.data[!is.na(neg.data$Significance), ]
+
+# creating volcano plot
+volcano <- ggplot() +
+  geom_point(data = pos.data, aes(x = l2fc, y = log.10.fdr, color = Significance), alpha = 0.5) +
+  geom_point(data = neg.data, aes(x = l2fc, y = log.10.fdr, color = Significance), alpha = 0.5) +
+  geom_vline(xintercept = 1, linetype = 'dashed', color = 'grey30') +
+  geom_vline(xintercept = -1, linetype = 'dashed', color = 'grey30') +
+  geom_hline(yintercept = -2, linetype = 'dashed', color = 'grey30') +
+  scale_color_manual(values = c('blue3', 'red3', 'grey')) +
+  scale_x_continuous(position = "top") +
+  xlab('L2FC') + ylab('log10 FDR') +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = c(0.85, 0.35),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+```
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig6-panel-e.pdf', height = 4, width = 4)
+print(volcano)
+dev.off()
+```
+
+**Figure 6 Panel E**
+```{r}
+volcano
+```
+
+Also performing analysis on GO terms:
+antioxidant activity --> GO:0016209
+cellular oxidant detoxification --> GO:0098869
+removal of superoxide radicals --> GO:0019430
+mycothiol-dependent detoxification --> GO:0010127
+response to oxidative stress --> GO:0006979
+response to nitrosative stress --> GO:0051409
+
+
+```{r}
+#################################################################################
+go.1 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 2)
+go.2 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 3)
+go.3 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 4)
+go.4 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 5)
+go.5 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 6)
+go.6 <- readxl::read_excel(path = '../data/Fig6/oxidative-stress-network/oxidative-stress-genes.xlsx', sheet = 7)
+go.data <- rbind(go.1, go.2, go.3, go.4, go.5, go.6)
+go.data.filtered <- go.data %>% filter(`Gene Names (ordered locus)` %in% mtb.gene.map$locus)
+go.data.filtered <- go.data.filtered %>% dplyr::select(`Gene Names (ordered locus)`, `GO Term`)
+names(go.data.filtered) <- c('rv.number', 'GO Term')
+oxidative.stress.genes <- go.data.filtered[match(unique(go.data.filtered$rv.number), go.data.filtered$rv.number), ]
+oxidative.stress.genes <- left_join(oxidative.stress.genes, gene.name.conversion.table)
+```
+
+```{r}
+# looking at TFOE data to extract regulons for oxidative stress network
+tfoe.fc <- read_csv(file = '../data/Fig6/oxidative-stress-network/tfoe-fold-change.csv')
+tfoe.fc <- tfoe.fc %>% pivot_longer(cols = -1, names_to = 'TF', values_to = 'FC')
+tfoe.pval <- read_csv(file = '../data/Fig6/oxidative-stress-network/tfoe-p-values.csv')
+tfoe.pval <- tfoe.pval %>% pivot_longer(cols = -1, names_to = 'TF', values_to = 'pvalue')
+# column binding data
+tfoe.data <- left_join(x = tfoe.fc, tfoe.pval)
+tfoe.data$interaction <- ifelse(tfoe.data$FC < 0, 'repression', 'activation')
+# reading in ChIP seq data for TF binding evidence
+chip.seq <- read_csv(file = '../data/Fig6/oxidative-stress-network/chipseq-binding-evidence.csv')
+chip.seq <- chip.seq %>% pivot_longer(cols = -1, names_to = 'TF', values_to = 'Evidence')
+chip.seq.evidence <- na.omit(chip.seq)
+# merging all tfoe and chipseq data
+tfoe.chipseq <- left_join(tfoe.data, chip.seq)
+tfoe.chipseq$adj.pvalue <- p.adjust(tfoe.chipseq$pvalue, method = 'fdr')
+tfoe.chipseq$log10adj.pvalue <- log10(tfoe.chipseq$adj.pvalue)
+# adding minimum pvalue to plot in log scale
+tfoe.data$pvalue <- tfoe.data$pvalue + 7.46e-275
+tfoe.data$adj.pvalue <- p.adjust(tfoe.data$pvalue, method = 'fdr')
+tfoe.data$log10adj.pvalue <- log10(tfoe.data$adj.pvalue)
+
+# printing out values for manuscript
+print(paste('The RNAseq TFOE dataset contains information on ', length(unique(tfoe.data$TF)), ' TFs', sep = ''))
+print(paste('The ChIP-seq TFOE dataset contains information on ', length(unique(chip.seq$TF)), ' TFs', sep = ''))
+```
+
+```{r}
+# filtering data to only include significant interactions
+tfoe.data.filtered <- tfoe.data %>% filter(adj.pvalue <= 0.05)
+# setting pop. size parameter for hypergeometric test
+population.size <- length(unique(tfoe.data.filtered$Gene))
+# performing hypergeometric tests to identify which regulons are enriched for ROS genes
+unique.tfs <- unique(tfoe.data.filtered$TF)
+enrichment.data <- list()
+for (t in 1:length(unique.tfs)) {
+  # filter gene lists for each TF to get regulon
+  regulon.data <- tfoe.data.filtered %>% filter(TF == unique.tfs[t])
+  # setting remainder parameters for hypergeometric test
+  regulated.genes <- unique(regulon.data$Gene)
+  sample.size <- length(regulated.genes)
+  population.successes <- nrow(oxidative.stress.genes)
+  ros.genes <- oxidative.stress.genes$rv.number
+  sample.successes <- length(intersect(x = regulated.genes, y = ros.genes))
+  # saving results of hypergeometric test
+  hyper.test <- tibble(
+    TF = unique.tfs[t],
+    n.regulated.genes = sample.size,
+    n.ros.genes = population.successes, n.overlap = sample.successes,
+    overlapping.loci = list(intersect(x = regulated.genes, y = ros.genes)),
+    hyper.test.pvalue = phyper(q = (sample.successes - 1),
+                               m = population.successes,
+                               n = ( population.size - population.successes ),
+                               k = sample.size,
+                               lower.tail = FALSE))
+  enrichment.data[[t]] <- hyper.test
+}
+network.enrichment <- do.call(rbind, enrichment.data)
+network.enrichment$adj.pvalue <- p.adjust(network.enrichment$hyper.test.pvalue, method = 'fdr')
+# filtering for significant hypergeometric tests to find regulons enriched for ROS genes
+network.enrichment.filtered <- network.enrichment %>%
+  filter(hyper.test.pvalue <= 0.05)
+# capturing list of TFs with ROS-enriched regulons
+ros.regulon.tfs <- unique(network.enrichment.filtered$TF)
+# filter TFOE interactions for TFs identified from hypergeometric tests
+tfoe.data.filtered.enriched <- tfoe.data.filtered %>% filter(TF %in% unique(network.enrichment.filtered$TF))
+# prune network to only include ros genes
+ros.network <- tfoe.data.filtered.enriched %>% filter(Gene %in% oxidative.stress.genes$rv.number)
+# identifying the TFs with influence over the primary TFs of ROS genes
+tfs.of.tfs <- tfoe.data.filtered %>% filter(Gene %in% unique(tfoe.data.filtered.enriched$TF))
+# adding TFs of the TFs in the network back to the network itself
+full.network <- rbind(ros.network, tfs.of.tfs) %>% arrange(TF)
+# merging with ChIP-seq data to include interactions with evidence of binding
+full.network.with.evidence <- left_join(full.network, chip.seq.evidence)
+# adding in relationships from ChIPseq and TFOE evidence that was missed by enrichment analysis
+# including all ROS gene interactions with evidence in both datasets
+additional.data <- tfoe.chipseq %>% filter(Gene %in% oxidative.stress.genes$rv.number | TF %in% oxidative.stress.genes$rv.number,
+                                                adj.pvalue <= 0.05, !is.na(Evidence))
+
+# additional.data <- tfoe.chipseq %>% filter(Gene %in% oxidative.stress.genes$rv.number | TF %in% oxidative.stress.genes$rv.number,
+#                                            !is.na(Evidence))
+
+# removing instances of autoregulation
+full.network.with.evidence <- full.network.with.evidence %>% filter(Gene != TF)
+# merging with identified data
+full.network.with.evidence <- rbind(full.network.with.evidence, additional.data)
+full.network.with.evidence <- unique(full.network.with.evidence)
+```
+
+```{r}
+# adding back into the network lone nodes of genes from the GO analysis that did not end up in the OSR network above
+included.osr.genes <- intersect(x = c(full.network.with.evidence$Gene, full.network.with.evidence$TF), y = oxidative.stress.genes$rv.number)
+extra.osr.nodes <- oxidative.stress.genes %>% filter(!rv.number %in% included.osr.genes)
+
+# writing code to identify if specific osr gene is a Gene or TF based on inclusion in TFOE
+tfoe.tfs <- unique(tfoe.data$TF)
+extra.node.info.list <- list()
+for (e in 1:nrow(extra.osr.nodes)) {
+  selected.node <- extra.osr.nodes$rv.number[e]
+  if (selected.node %in% tfoe.tfs) {
+    extra.node.info.list[[e]] <- tibble(Gene = NA, TF = selected.node, FC = NA, pvalue = NA,
+                                        interaction = NA, adj.pvalue = NA, log10adj.pvalue = NA, Evidence = NA)
+  }
+  else {
+    extra.node.info.list[[e]] <- tibble(Gene = selected.node, TF = NA, FC = NA, pvalue = NA,
+                                        interaction = NA, adj.pvalue = NA, log10adj.pvalue = NA, Evidence = NA)
+  }
+}
+extra.node.info <- do.call(rbind, extra.node.info.list)
+full.network.with.evidence <- rbind(full.network.with.evidence, extra.node.info)
+```
+
+```{r}
+# annotating TFOE network
+names(full.network.with.evidence)[1] <- 'rv.number'
+full.network.with.evidence <- left_join(full.network.with.evidence, gene.name.conversion.table)
+names(full.network.with.evidence)[c(1, 2, 9)] <- c('target.rv.number', 'rv.number', 'Target')
+full.network.with.evidence <- left_join(full.network.with.evidence, gene.name.conversion.table)
+names(full.network.with.evidence)[c(2, 10)] <- c('source.rv.number', 'Source')
+
+full.network.with.evidence$Target <- ifelse(is.na(full.network.with.evidence$Target),
+                                            full.network.with.evidence$target.rv.number,
+                                            full.network.with.evidence$Target)
+
+full.network.with.evidence$Source <- ifelse(is.na(full.network.with.evidence$Source),
+                                            full.network.with.evidence$source.rv.number,
+                                            full.network.with.evidence$Source)
+
+# adding GO annotations in one column for either target, source, or both
+annotations <- list()
+for (r in 1:nrow(full.network.with.evidence)) {
+  data <- full.network.with.evidence[r, ]
+  if (data$target.rv.number %in% oxidative.stress.genes$rv.number & data$source.rv.number %in% oxidative.stress.genes$rv.number) {
+    target.term <- oxidative.stress.genes %>% filter(rv.number == data$target.rv.number) %>% pull(`GO Term`)
+    source.term <- oxidative.stress.genes %>% filter(rv.number == data$source.rv.number) %>% pull(`GO Term`)
+    annotations[r] <- paste('Target: ', target.term, '; Source: ', source.term, sep = '')
+  }
+  else if (data$target.rv.number %in% oxidative.stress.genes$rv.number & !data$source.rv.number %in% oxidative.stress.genes$rv.number) {
+    target.term <- oxidative.stress.genes %>% filter(rv.number == data$target.rv.number) %>% pull(`GO Term`)
+    annotations[r] <- paste('Target: ', target.term, sep = '')
+  }
+  else if (!data$target.rv.number %in% oxidative.stress.genes$rv.number & data$source.rv.number %in% oxidative.stress.genes$rv.number) {
+    source.term <- oxidative.stress.genes %>% filter(rv.number == data$source.rv.number) %>% pull(`GO Term`)
+    annotations[r] <- paste('Source: ', source.term, sep = '')
+  }
+  else {
+    annotations[r] <- 'No association'
+  }
+}
+
+full.network.with.evidence$`GO annotation` <- unlist(annotations)
+
+names(full.network.with.evidence) <- c('Target.rv.number', 'Source.rv.number', 'TFOE log2 FC', 'PValue', 'Interaction',
+                                       'Adj.PValue', 'Adj.log10PValue', 'ChIP-seq Evidence', 'Target', 'Source',
+                                       'GO annotation')
+full.network.with.evidence <- full.network.with.evidence %>%
+  dplyr::select(Source, Target, `TFOE log2 FC`, PValue, Adj.PValue, Interaction, `ChIP-seq Evidence`, `GO annotation`, Source.rv.number, Target.rv.number)
+full.network.with.evidence$`Abs TFOE log2 FC` <- abs(full.network.with.evidence$`TFOE log2 FC`)
+
+full.network.with.evidence <- unique(full.network.with.evidence)
+
+# resplitting data between interaction network and lone OSR nodes
+interaction.network <- full.network.with.evidence %>% filter(!is.na(Interaction))
+lone.osr.nodes <- full.network.with.evidence %>% filter(is.na(Interaction))
+```
+
+```{r}
+# writing to file
+write_csv(interaction.network, file = '../data/Fig6/oxidative-stress-network/cytoscape-ros-network-input.csv')
+write_csv(lone.osr.nodes, file = '../data/Fig6/oxidative-stress-network/cytoscape-ros-lone-nodes-input.csv')
+```
+
+```{r}
+# analysis of genes from oxidative stress network and bayes
+ros.network.bayes.genes <- bayes %>% filter(locus %in% full.network.with.evidence$Source | locus %in% full.network.with.evidence$Target,
+                                            adj.p.value <= 0.05)
+# looking separately at intergenic loci
+intergenic.mapping <- gene.name.conversion.table
+names(intergenic.mapping) <- c('full.locus', 'locus')
+intergenic.mapping$upstream.gene <- unlist(lapply(strsplit(intergenic.mapping$locus, '-'), '[', 2))
+ros.network.intergenic <- intergenic.mapping %>%
+  filter(!is.na(upstream.gene)) %>%
+  filter(upstream.gene %in% unique(full.network.with.evidence$Source) | upstream.gene %in% unique(full.network.with.evidence$Target))
+
+ros.network.bayes.intergenic <- left_join(ros.network.intergenic, bayes) %>% filter(adj.p.value <= 0.05)
+```
+
+```{r}
+# generating supplementary table S2
+ros.network.bayes.genes <- ros.network.bayes.genes %>% dplyr::select(locus, bayes, adj.p.value)
+ros.network.bayes.intergenic <- ros.network.bayes.intergenic %>% dplyr::select(locus, bayes, adj.p.value)
+
+table.s2 <- rbind(ros.network.bayes.genes, ros.network.bayes.intergenic)
+write_csv(table.s2, file = '../supplemental-tables/S2-OSR-network-Sig-BP-loci.csv')
+```
+
+
+Also assessing if there is an enrichment of significant bayes probability genes amongst OSR network
+
+```{r}
+# assessing if the final network is enriched for genes with significant bayes probability
+# getting list of all loci in network to get population size and population successes
+bayes.genic <- bayes[!grepl('-', bayes$locus), ]
+all.genic.loci <- unique(bayes.genic$locus)
+n.total <- length(all.genic.loci)
+all.network.genes <- c(full.network.with.evidence$Source, full.network.with.evidence$Target)
+all.network.genes <- all.network.genes[!is.na(all.network.genes)]
+n.network.total <- length(unique(all.network.genes))
+# getting sample size and sample successes
+n.significant.loci <- length(unique(bayes.genic %>% filter(adj.p.value <= 0.05) %>% pull(locus)))
+n.significant.network.loci <- nrow(ros.network.bayes.genes) + nrow(ros.network.bayes.intergenic)
+
+# performing hypergeometric test to calculate significance of enrichment of intergenic loci amonst significant hits
+p.value <- phyper(q = (n.significant.network.loci - 1),
+                  m = n.network.total,
+                  n = ( n.total - n.network.total ),
+                  k = n.significant.loci,
+                  lower.tail = FALSE)
+print(paste('hypergeometric test p value for enrichment of significant bayes loci amongst OSR network nodes = ', p.value, sep = ''))
+
+# getting additional values for printing
+regulated.tfs <- intersect(x = full.network.with.evidence$Source, y = full.network.with.evidence$Target)
+regulated.tfs <- regulated.tfs[!is.na(regulated.tfs)]
+
+n.genes <- length(unique(full.network.with.evidence %>% filter(!Target %in% regulated.tfs, !is.na(Target)) %>% pull(Target)))
+n.tfs <- length(unique(full.network.with.evidence %>% filter(!is.na(Source)) %>% pull(Source)))
+n.sig.genes <- nrow(ros.network.bayes.genes)
+n.sig.intergenics <- nrow(ros.network.bayes.intergenic)
+
+print(paste('the final network contained ', n.genes, ' genes and ', n.tfs, ' TFs', sep = ''))
+print(paste('the network was enriched for ', n.sig.genes, ' genes and ', n.sig.intergenics, ' intergenic regions with significant BP', sep = ''))
+```
+
+Next, looking to see if the nodes of the OSR network are enriched amongst genes that responded (enriched or depleted) to drug treatment in the CRISPRi dataset
+
+This is very similar to the analysis done previously, looking for enrichment of significant BP genes within the CRISPRi datasets
+
+```{r}
+# performing hypergeometric tests to look for over-representation of OSR network genes enriched/depleted in CRISPRi data
+# first getting gene names in OSR network, either by all nodes, all nodes + any missing of the 68 ROS genes, or only the 68 ROS genes
+# all.osr.nodes <- unique(c(full.network.with.evidence$Source.rv.number, full.network.with.evidence$Target.rv.number))
+all.osr.nodes <- unique(c(full.network.with.evidence$Source.rv.number, full.network.with.evidence$Target.rv.number, oxidative.stress.genes$rv.number))
+# all.osr.nodes <- unique(oxidative.stress.genes$rv.number)
+
+all.osr.nodes <- all.osr.nodes[!is.na(all.osr.nodes)]
+
+# importing CRISPRi gene enrichment/depletion data from Supplemental Data 2
+treatments <- c('BDQ 1d', 'BDQ 5d', 'BDQ 10d', 'CLR 1d', 'CLR 5d', 'CLR 10d', 'EMB 1d', 'EMB 5d', 'EMB 10d', 'INH 1d', 'INH 5d', 'INH 10d', 'LVX 1d', 'LVX 5d', 'LVX 10d',
+                'LZD 1d', 'LZD 5d', 'LZD 10d', 'RIF 1d', 'RIF 5d', 'RIF 10d', 'STR 1d', 'STR 5d', 'VAN 1d', 'VAN 5d', 'VAN 10d')
+sheets <- c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 29)
+
+crispri.osr.enrichment.test.list <- list()
+
+for (d in 1:length(treatments)) {
+  treatment <- treatments[d]
+  selected.sheet <- sheets[d]
+  
+  crispri.data <- readxl::read_excel(path = '../data/Fig6/published-data/li-et-al-2022-table-SD-F1.xlsx', sheet = selected.sheet)
+  # print(paste('treatment = ', treatment, ', sheet = ', selected.sheet, ', columns = ', ncol(crispri.data), sep = ''))
+  
+  crispri.data$`locus tag` <- paste('Rv', unlist(lapply(strsplit(unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 1)), 'RVBD'), '[', 2)), sep = '')
+  crispri.data[crispri.data == 'RvNA'] <- NA
+  crispri.data$`gene name` <- unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 2))
+  crispri.data <- crispri.data %>% filter(`locus tag` %in% mtb.gene.map$locus)
+  # high dose columns
+  crispri.data.high <- crispri.data[, c(1, 22, 23, 26, 27, 28, 29)]
+  names(crispri.data.high) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+  # med dose columns
+  crispri.data.med <- crispri.data[, c(1, 14, 15, 18, 19, 28, 29)]
+  names(crispri.data.med) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+  # low dose columns
+  crispri.data.low <- crispri.data[, c(1, 6, 7, 10, 11, 28, 29)]
+  names(crispri.data.low) <- c('ORF', 'neg l2fc', 'neg fdr', 'pos l2fc', 'pos fdr', 'locus tag', 'gene name')
+
+  experiment.groups <- list(crispri.data.high, crispri.data.med, crispri.data.low)
+  experiment.conds <- c('high', 'medium', 'low')
+  crispri.hyper.tests.per.dose <- list()
+  for (e in 1:length(experiment.groups)) {
+    crispri.data.select <- experiment.groups[[e]]
+    dose <- experiment.conds[e]
+    # filtering enrichment/depletion data genes to only include genes that exist in established genome
+    crispri.data.filtered <- crispri.data.select %>% filter(`locus tag` %in% unique(mtb.gene.map$locus))
+    # getting population size for downstream hypergeometric tests
+    population.size <- nrow(crispri.data.filtered)
+    # getting input values for hypergeometric test
+    sample.size <- length(all.osr.nodes)
+    #################################################################################
+    # hypergeometric test for all significant genes from crispri
+    # extracting list of significant genes (crispri)
+    crispri.significant.genes <- unique(rbind(crispri.data.filtered %>%
+                                                filter(`pos l2fc` >= 1, `pos fdr` <= 0.01),
+                                              crispri.data.filtered %>%
+                                                filter(`neg l2fc` <= -1, `neg fdr` <= 0.01)) %>% pull(`locus tag`))
+    crispri.significant.genes <- crispri.significant.genes[!is.na(crispri.significant.genes)]
+    population.successes <- length(crispri.significant.genes)
+    sample.successes <- length(intersect(x = all.osr.nodes, y = crispri.significant.genes))
+    # saving results of hypergeometric test
+    hyper.all <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Responder',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.osr.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = all.osr.nodes, y = crispri.significant.genes)))
+    #################################################################################
+    # hypergeometric test only for genes with alleviating or enriched interactions
+    crispri.up.genes <- unique(crispri.data.filtered %>%
+                                 filter(`pos l2fc` >= 1, `pos fdr` <= 0.01) %>% pull(`locus tag`))
+    crispri.up.genes <- crispri.up.genes[!is.na(crispri.up.genes)]
+    population.successes <- length(crispri.up.genes)
+    sample.successes <- length(intersect(x = all.osr.nodes, y = crispri.up.genes))
+    hyper.up <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Enriched',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.osr.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = all.osr.nodes, y = crispri.up.genes)))
+    #################################################################################
+    # hypergeometric test only for genes with aggravating or depleted interactions
+    crispri.down.genes <- unique(crispri.data.filtered %>%
+                                   filter(`neg l2fc` <= -1, `neg fdr` <= 0.01) %>% pull(`locus tag`))
+    crispri.down.genes <- crispri.down.genes[!is.na(crispri.down.genes)]
+    population.successes <- length(crispri.down.genes)
+    sample.successes <- length(intersect(x = all.osr.nodes, y = crispri.down.genes))
+    hyper.down <- tibble(
+      dataset = 'CRISPRi',
+      response = 'Depleted',
+      hyper.test.p.value = phyper(q = (sample.successes - 1),
+                                  m = population.successes,
+                                  n = ( population.size - population.successes ),
+                                  k = sample.size,
+                                  lower.tail = FALSE),
+      population.size = population.size,
+      n.osr.genes = sample.size,
+      n.significant.exp.genes = population.successes, n.overlap = sample.successes,
+      overlapping.genes = list(intersect(x = all.osr.nodes, y = crispri.down.genes)))
+
+    # aggregating all data from three hypergeometric tests
+    hyper.tests <- rbind(hyper.all, hyper.up, hyper.down)
+    hyper.tests$treatment <- paste(dose, ' dose ', treatment, sep = '')
+    crispri.hyper.tests.per.dose[[e]] <- hyper.tests
+  }
+  # putting together all hypergeometric tests for CRISPRi
+  crispri.hyper.tests <- do.call(rbind, crispri.hyper.tests.per.dose)
+  crispri.osr.enrichment.test.list[[d]] <- crispri.hyper.tests
+}
+
+crispri.osr.enrichment.tests <- do.call(rbind, crispri.osr.enrichment.test.list)
+# crispri.enrichment.tests$adj.p.value <- p.adjust(crispri.enrichment.tests$hyper.test.p.value, method = 'fdr')
+crispri.osr.enrichment.tests.filtered <- crispri.osr.enrichment.tests %>% filter(hyper.test.p.value <= 0.05)
+# crispri.osr.enrichment.tests.filtered$overlapping.genes <- sapply(crispri.osr.enrichment.tests.filtered$overlapping.genes, function(x) paste(x, collapse = ', '))
+```
+
+```{r}
+write_csv(crispri.osr.enrichment.tests.filtered, file = '../data/Fig6/osr-network-enrichment-in-crispri.csv')
+```
+
+
+```{r}
+# generating Table 2, using information from the significant BP genes enriched in CRISPRi and the OSR network enriched in CRISPRi
+bayes.v.crispri <- crispri.enrichment.tests.filtered
+osr.v.crispri <- crispri.osr.enrichment.tests.filtered
+# summarize BP vs. CRISPRi
+bayes.v.crispri.summary.list <- list()
+for (r in 1:nrow(bayes.v.crispri)) {
+  select.test <- bayes.v.crispri[r, ]
+  gene.list.conversion <- tibble(rv.number = unlist(select.test$overlapping.genes))
+  gene.list.conversion <- suppressMessages(left_join(gene.list.conversion, gene.name.conversion.table))
+  bayes.v.crispri.summary.list[[r]] <- tibble(`BP vs. CRISPRi hypergeometric test p value` = select.test$hyper.test.p.value,
+                                              `Sig. BP genes` = list(gene.list.conversion$locus),
+                                              `CRISPRi treatment` = paste(select.test$response, ' in ', select.test$treatment, sep = ''))
+}
+bayes.v.crispri.summary <- do.call(rbind, bayes.v.crispri.summary.list)
+
+# summarize OSR vs. CRISPRi
+osr.v.crispri.summary.list <- list()
+for (r in 1:nrow(osr.v.crispri)) {
+  select.test <- osr.v.crispri[r, ]
+  gene.list.conversion <- tibble(rv.number = unlist(select.test$overlapping.genes))
+  gene.list.conversion <- suppressMessages(left_join(gene.list.conversion, gene.name.conversion.table))
+  osr.v.crispri.summary.list[[r]] <- tibble(`OSR vs. CRISPRi hypergeometric test p value` = select.test$hyper.test.p.value,
+                                            `OSR genes` = list(gene.list.conversion$locus),
+                                            `CRISPRi treatment` = paste(select.test$response, ' in ', select.test$treatment, sep = ''))
+}
+osr.v.crispri.summary <- do.call(rbind, osr.v.crispri.summary.list)
+
+# collecting treatment conditions in common between the two sets of enrichment tests
+common.treatments <- intersect(x = bayes.v.crispri.summary$`CRISPRi treatment`, y = osr.v.crispri.summary$`CRISPRi treatment`)
+common.test.tables <- list()
+for (c in 1:length(common.treatments)) {
+  common.bayes.test <- bayes.v.crispri.summary %>% filter(`CRISPRi treatment` == common.treatments[c])
+  common.osr.test <- osr.v.crispri.summary %>% filter(`CRISPRi treatment` == common.treatments[c])
+  three.way.genes <- intersect(x = unlist(common.bayes.test$`Sig. BP genes`),
+                               y = unlist(common.osr.test$`OSR genes`))
+  
+  common.test.tables[[c]] <- tibble(`CRISPRi treatment` = common.treatments[c],
+                                    `BP vs. CRISPRi hypergeometric test p value` = common.bayes.test$`BP vs. CRISPRi hypergeometric test p value`,
+                                    `Sig. BP genes` = common.bayes.test$`Sig. BP genes`,
+                                    `OSR vs. CRISPRi hypergeometric test p value` = common.osr.test$`OSR vs. CRISPRi hypergeometric test p value`,
+                                    `OSR genes` = common.osr.test$`OSR genes`,
+                                    `Three way overlapping genes` = list(three.way.genes))
+}
+common.tests <- do.call(rbind, common.test.tables)
+
+# collecting significant tests unique to either the BP vs. CRISPRi or OSR vs. CRISPRi results
+bayes.v.crispri.unique <- bayes.v.crispri.summary %>% filter(!`CRISPRi treatment` %in% common.treatments)
+osr.v.crispri.unique <- osr.v.crispri.summary %>% filter(!`CRISPRi treatment` %in% common.treatments)
+
+all.tests.summary <- bind_rows(common.tests, bayes.v.crispri.unique, osr.v.crispri.unique)
+
+# splitting columns with lists of genes for exporting
+all.tests.summary$`Sig. BP genes` <- sapply(all.tests.summary$`Sig. BP genes`, function(x) paste(x, collapse = ', '))
+all.tests.summary$`OSR genes` <- sapply(all.tests.summary$`OSR genes`, function(x) paste(x, collapse = ', '))
+all.tests.summary$`Three way overlapping genes` <- sapply(all.tests.summary$`Three way overlapping genes`, function(x) paste(x, collapse = ', '))
+
+# further annotating table with its own information
+all.tests.summary$`Gene Group` <- unlist(lapply(strsplit(all.tests.summary$`CRISPRi treatment`, ' in'), '[', 1))
+all.tests.summary$Dose <- unlist(lapply(strsplit(unlist(lapply(strsplit(all.tests.summary$`CRISPRi treatment`, 'in '), '[', 2)), ' dose'), '[', 1))
+all.tests.summary$Antibiotic <- unlist(lapply(strsplit(unlist(lapply(strsplit(all.tests.summary$`CRISPRi treatment`, 'dose '), '[', 2)), ' '), '[', 1))
+all.tests.summary$`Day(s)` <- as.numeric(unlist(lapply(strsplit(unlist(lapply(strsplit(all.tests.summary$`CRISPRi treatment`, ' '), '[', 6)), 'd'), '[', 1)))
+
+# factoring and reordering
+all.tests.summary$Antibiotic <- factor(all.tests.summary$Antibiotic, levels = c('INH', 'EMB', 'CLR', 'RIF', 'STR', 'BDQ', 'LZD', 'VAN'))
+all.tests.summary$Dose <- factor(all.tests.summary$Dose, levels = c('low', 'medium', 'high'))
+all.tests.summary$`Gene Group` <- factor(all.tests.summary$`Gene Group`, levels = c('Enriched', 'Depleted', 'Responder'))
+
+all.tests.summary <- all.tests.summary[with(all.tests.summary, order(Antibiotic, Dose, `Day(s)`, `Gene Group`)), ]
+all.tests.summary <- all.tests.summary %>% dplyr::select(Antibiotic, Dose, `Day(s)`, `Gene Group`,
+                                                         `BP vs. CRISPRi hypergeometric test p value`, `Sig. BP genes`,
+                                                         `OSR vs. CRISPRi hypergeometric test p value`, `OSR genes`, `Three way overlapping genes`)
+```
+
+```{r}
+write_csv(all.tests.summary, file = '../data/Fig6/Table2-crispri-enrichment-summary.csv')
+```
+
+
+Next, analyzing data from EGRIN - Environment and Gene Regulatory Influence Network - to compliment existing network information from TFOE and ChIP-seq
+
+EGRIN enables the identification of regulatory relationships that may or may not be differentially active across different environments, including oxidative stress
+
+EGRIN data was pulled from the following GitHub: https://github.com/baliga-lab/egrin2api_mtu/tree/master
+
+```{r}
+# reading in EGRIN data
+# corem.targets <- read_csv(file = '../data/Fig6/published-data/egrin2api_mtu/data/corem_genes_20171129.csv')
+# names(corem.targets) <- c('corem', 'gene')
+# corem.targets$corem <- as.numeric(unlist(lapply(strsplit(corem.targets$corem, '_'), '[', 2)))
+# # also evaluating which GREs are associated with each corem
+# corem.gre <- read_csv(file = '../data/Fig6/published-data/egrin2api_mtu/data/20161223.GRE.corem.associations.csv')
+# # also checking which condition blocks are associated with each corem
+# corem.conditions <- read_csv(file = '../data/Fig6/published-data/egrin2api_mtu/data/corem_unique_condblocks-20170216.csv')
+# names(corem.conditions)[1] <- 'corem'
+# # first checking to see what corems have predicted regulons enriched for ROS genes
+# # this is very similar to the analysis above, that used TFOE data
+# # setting pop. size parameter for hypergeometric test
+# population.size <- length(unique(corem.targets$gene))
+# included.ros.genes <- oxidative.stress.genes %>% filter(rv.number %in% unique(corem.targets$gene))
+# # performing hypergeometric tests to identify which corems are enriched for ROS genes
+# unique.corems <- unique(corem.targets$corem)
+# enrichment.data <- list()
+# for (t in 1:length(unique.corems)) {
+#   # filter gene lists for each corem to get regulon
+#   corem.data <- corem.targets %>% filter(corem == unique.corems[t])
+#   # setting remainder parameters for hypergeometric test
+#   corem.genes <- unique(corem.data$gene)
+#   select.corem.gres <- unique(corem.gre %>% filter(corem == unique.corems[t]) %>% pull(gre))
+#   select.corem.gre.pvalues <- corem.gre %>% filter(corem == unique.corems[t]) %>% pull(qval_BH)
+#   select.corem.conditions <- corem.conditions %>% filter(corem == unique.corems[t]) %>% pull(EGRIN2.block)
+#   sample.size <- length(corem.genes)
+#   population.successes <- nrow(included.ros.genes)
+#   ros.genes <- included.ros.genes$rv.number
+#   overlap <- intersect(x = corem.genes, y = ros.genes)
+#   sample.successes <- length(overlap)
+#   # saving results of hypergeometric test
+#   hyper.test <- tibble(
+#     corem = unique.corems[t],
+#     n.corem.genes = sample.size,
+#     # corem.genes = paste(corem.genes, collapse = ', '),
+#     # corem.gres = paste(select.corem.gres, collapse = ', '),
+#     # corem.gre.pvalues = paste(select.corem.gre.pvalues, collapse = ', '),
+#     # corem.condition.blocks = paste(select.corem.conditions, collapse = ', '),
+#     corem.genes = list(corem.genes),
+#     corem.gres = list(select.corem.gres),
+#     corem.gre.pvalues = list(select.corem.gre.pvalues),
+#     corem.condition.blocks = list(select.corem.conditions),
+#     n.ros.genes = population.successes, n.overlap = sample.successes,
+#     overlapping.loci = list(overlap),
+#     hyper.test.pvalue = phyper(q = (sample.successes - 1),
+#                                m = population.successes,
+#                                n = ( population.size - population.successes ),
+#                                k = sample.size,
+#                                lower.tail = FALSE))
+#   enrichment.data[[t]] <- hyper.test
+# }
+# egrin.network.enrichment <- do.call(rbind, enrichment.data)
+# egrin.network.enrichment$adj.pvalue <- p.adjust(egrin.network.enrichment$hyper.test.pvalue, method = 'fdr')
+# # filtering for significant hypergeometric tests to find regulons enriched for ROS genes
+# egrin.network.enrichment.filtered <- egrin.network.enrichment %>%
+#   filter(hyper.test.pvalue <= 0.05)
+# egrin.network.enrichment.filtered.fdr <- egrin.network.enrichment %>%
+#   filter(adj.pvalue <= 0.05)
+# # write_csv(egrin.network.enrichment.filtered.fdr, file = '../data/Fig6/oxidative-stress-network/ros-enriched-corems.csv')
+# ##################################################################################
+# # also getting a network that retains all corems with at least one ROS gene
+# all.ros.corems <- corem.targets %>% filter(gene %in% oxidative.stress.genes$rv.number)
+# unique.ros.corem.genes <- unique(all.ros.corems$gene)
+# 
+# network.overlap <- intersect(x = unique.ros.corem.genes, y = unique(c(full.network.with.evidence$Source.rv.number, full.network.with.evidence$Target.rv.number)))
+# 
+# corem.inclusion.information <- tibble(rv.number = unique.ros.corem.genes,
+#                                       inclusion = ifelse(unique.ros.corem.genes %in% network.overlap, yes = 'gene in network and corem', no = 'gene not in network'))
+# corem.inclusion.information <- left_join(corem.inclusion.information, oxidative.stress.genes)
+```
+
+```{r}
+# # next, identifying which TFs are associated with each corem
+# # hypergeometric test to evaluate if corem x is enriched for genes controlled by TF y
+# # TF information based on either union or intersection of TFOE and ChIP-seq data
+# # only including TFs and targets that are in corems
+# unique.corem.genes <- unique(corem.targets$gene)
+# tfoe.chipseq.union <- tfoe.chipseq %>% filter(adj.pvalue <= 0.05 | !is.na(Evidence)) %>% filter(TF %in% unique.corem.genes | Gene %in% unique.corem.genes)
+# tfoe.chipseq.intersection <- tfoe.chipseq %>% filter(adj.pvalue <= 0.05, !is.na(Evidence)) %>% filter(TF %in% unique.corem.genes | Gene %in% unique.corem.genes)
+# 
+# unique.tfs.union <- unique(tfoe.chipseq.union$TF)
+# unique.tfs.intersection <- unique(tfoe.chipseq.intersection$TF)
+# 
+# population.size <- length(unique.corem.genes)
+# 
+# corem.enrichment.tables <- list()
+# for (i in 1:nrow(egrin.network.enrichment.filtered.fdr)) {
+#   select.corem.data <- egrin.network.enrichment.filtered.fdr[i, ]
+#   select.corem.id <- select.corem.data$corem
+#   select.corem.genes <- unlist(select.corem.data$corem.genes)
+#   sample.size <- length(select.corem.genes)
+#   
+#   # enrichment test for union of tfoe or chip-seq data
+#   union.enrichment.tables <- list()
+#   for (t in 1:length(unique.tfs.union)) {
+#     select.tfoe.chipseq.union <- tfoe.chipseq.union %>% filter(TF == unique.tfs.union[t])
+#     union.population.successes <- nrow(select.tfoe.chipseq.union)
+#     tfoe.chipseq.genes <- unique(select.tfoe.chipseq.union$Gene)
+#     overlap <- intersect(x = select.corem.genes, y = tfoe.chipseq.genes)
+#     sample.successes <- length(overlap)
+#     
+#     # saving results of hypergeometric test
+#     suppressWarnings(hyper.test <- tibble(
+#       corem = select.corem.id,
+#       n.corem.genes = sample.size,
+#       corem.genes = select.corem.data$corem.genes,
+#       corem.gres = select.corem.data$corem.gres,
+#       corem.gre.pvalues = select.corem.data$corem.gre.pvalues,
+#       TF = unique.tfs.union[t],
+#       n.tfoe.chipseq.genes = union.population.successes, n.overlap = sample.successes,
+#       overlapping.loci = list(overlap),
+#       hyper.test.pvalue = phyper(q = (sample.successes - 1),
+#                                  m = union.population.successes,
+#                                  n = ( population.size - union.population.successes ),
+#                                  k = sample.size,
+#                                  lower.tail = FALSE)))
+#     union.enrichment.tables[[t]] <- hyper.test
+#   }
+#   union.enrichment <- do.call(rbind, union.enrichment.tables)
+#   union.enrichment$adj.pvalue <- p.adjust(union.enrichment$hyper.test.pvalue, method = 'fdr')
+#   union.enrichment$comparison <- 'union tfoe or chip-seq'
+#   
+#   # enrichment tests for intersection of tfoe and chip-seq
+#   intersection.enrichment.tables <- list()
+#   for (s in 1:length(unique.tfs.intersection)) {
+#     select.tfoe.chipseq.intersection <- tfoe.chipseq.intersection %>% filter(TF == unique.tfs.intersection[s])
+#     intersection.population.successes <- nrow(select.tfoe.chipseq.intersection)
+#     tfoe.chipseq.genes <- unique(select.tfoe.chipseq.intersection$Gene)
+#     overlap <- intersect(x = select.corem.genes, y = tfoe.chipseq.genes)
+#     sample.successes <- length(overlap)
+#     
+#     # saving results of hypergeometric test
+#     suppressWarnings(hyper.test <- tibble(
+#       corem = select.corem.id,
+#       n.corem.genes = sample.size,
+#       corem.genes = select.corem.data$corem.genes,
+#       corem.gres = select.corem.data$corem.gres,
+#       corem.gre.pvalues = select.corem.data$corem.gre.pvalues,
+#       TF = unique.tfs.intersection[s],
+#       n.tfoe.chipseq.genes = intersection.population.successes, n.overlap = sample.successes,
+#       overlapping.loci = list(overlap),
+#       hyper.test.pvalue = phyper(q = (sample.successes - 1),
+#                                  m = intersection.population.successes,
+#                                  n = ( population.size - intersection.population.successes ),
+#                                  k = sample.size,
+#                                  lower.tail = FALSE)))
+#     intersection.enrichment.tables[[s]] <- hyper.test
+#   }
+#   intersection.enrichment <- do.call(rbind, intersection.enrichment.tables)
+#   intersection.enrichment$adj.pvalue <- p.adjust(intersection.enrichment$hyper.test.pvalue, method = 'fdr')
+#   intersection.enrichment$comparison <- 'intersection tfoe and chip-seq'
+#   
+#   corem.enrichment.tables[[i]] <- rbind(union.enrichment, intersection.enrichment)
+# }
+# 
+# corem.tf.enrichment <- do.call(rbind, corem.enrichment.tables)
+# corem.tf.enrichment.filtered <- corem.tf.enrichment %>% filter(hyper.test.pvalue <= 0.05)
+# corem.tf.enrichment.filtered.fdr <- corem.tf.enrichment %>% filter(adj.pvalue <= 0.05)
+```
+
+```{r}
+# # swapping Rv number with gene name to compare TFs associated with each corem to those in the existing network
+# corem.tfs <- tibble(corem = corem.tf.enrichment.filtered.fdr$corem,
+#                     rv.number = corem.tf.enrichment.filtered.fdr$TF)
+# corem.tfs <- left_join(corem.tfs, gene.name.conversion.table)
+# unique.corem.tfs <- unique(corem.tfs$locus)
+# 
+# overlapping.tfs <- intersect(x = unique.corem.tfs, y = unique(full.network.with.evidence$Source))
+```
+
+```{r}
+# next, looking at remainder files from EGRIN2 analysis, including TSS information for each gene
+# tss.info <- read_csv(file = '../data/Fig6/published-data/egrin2api_mtu/data/20161006.gene.TSS.start.stop.csv')
+# # reading in TF binding position list, as determined by ChIP-seq
+# tf.binding.positions.chip.seq <- read_csv(file = '../data/Fig6/published-data/egrin2api_mtu/data/chip_seq_data.csv')
+# tf.binding.positions.chip.seq.filtered <- tf.binding.positions.chip.seq %>% filter(tf %in% unique(corem.tf.enrichment.filtered.fdr$TF))
+# 
+# # also assessing which conditions are associated with each corem enriched for ROS genes
+# corem.conditions.filtered <- corem.conditions %>% filter(corem %in% unique(corem.tf.enrichment.filtered.fdr$corem))
+# 
+# # reading in Mtb H37Rv reference genome from: https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000195955.2/
+# # h37rv.genome <- read.fasta(file = '../data/genome-annotations/GCF_000195955.2_ASM19595v2_genomic.fna', seqtype = 'DNA')
+# h37rv.genome = readDNAStringSet('../data/genome-annotations/GCF_000195955.2_ASM19595v2_genomic.fna')
+```
+
+```{r}
+# # writing code to extract the -200 to +100 region of each gene's TSS
+# # will be looking specifically at the regulatory region of genes who are controlled by TFs identified above
+# 
+# # first getting Rv numbers for each TF
+# unique.tfs <- tibble(locus = unique.corem.tfs)
+# unique.tfs <- left_join(unique.tfs, gene.name.conversion.table)
+# unique.corem.tfs.rv <- unique.tfs$rv.number
+# 
+# for (t in 1:length(unique.corem.tfs.rv)) {
+#   tf <- unique.corem.tfs.rv[t]
+#   tf.regulon <- tfoe.chipseq.union %>% filter(TF == tf)
+#   regulon.genes <- unique(tf.regulon$Gene)
+#   
+#   regulon.gene.seqs <- list()
+#   for (r in 1:length(regulon.genes)) {
+#     gene <- regulon.genes[r]
+#     gene.tss.info <- tss.info %>% filter(gene == regulon.genes[r])
+#     gene.tss.position <- gene.tss.info %>% pull(genome.position)
+#     if (gene.tss.info$strand == '+') {
+#       regulated.region <- subseq(h37rv.genome,
+#                                  start = gene.tss.position - 200,
+#                                  end = gene.tss.position + 100)
+#     }
+#     else {
+#       regulated.region <- subseq(h37rv.genome,
+#                                  start = gene.tss.position - 100,
+#                                  end = gene.tss.position + 200)
+#     }
+#     names(regulated.region) <- gene
+#     regulon.gene.seqs[[r]] <- regulated.region
+#   }
+#   # combine all subseqs into one DNAStringSet
+#   seqs <- do.call(c, regulon.gene.seqs)
+#   # write multi-fasta
+#   writeXStringSet(seqs,
+#                   filepath = paste0('../data/Fig6/oxidative-stress-network/ros-corem-tf-regulon-mfastas/TF-', tf, '-regulon.fasta'),
+#                   format = "fasta")
+# }
+# # the files generated here can be input into MEME to identify motif consensus sequences within each regulon for comparison to GREs
+```
+
+
+
+
+
+

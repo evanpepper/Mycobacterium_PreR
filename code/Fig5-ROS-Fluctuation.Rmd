@@ -1,0 +1,618 @@
+---
+title: "Figure 5 Notebook: Oxidative stress INH fluctuation assay"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the data from the quantification of INH resistance mutation rate with or without pre-treatment with cumene hydroperoxide.
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(growthcurver)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+  library(ggrepel)
+}
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 14),
+                    legend.text = element_text(size = 10),
+                    strip.text = element_text(size = 10))
+```
+
+Analyzing the results from the fluctuation assay involving pre-treatment of wildtype Msm with 1x IC50 cumene hydroperoxide before growing on 50x MIC INH plates
+
+```{r}
+# reading in cfu data from cultures plated without antibiotic, to get population size
+cfu.counts <- read_csv(file = '../data/Fig5/fluctuation-assay-cfus.csv')
+cfu.counts$strain <- unlist(lapply(strsplit(cfu.counts$sample, '-'), '[', 1))
+cfu.counts$treatment <- unlist(lapply(strsplit(cfu.counts$sample, '-'), '[', 2))
+cfu.counts$bio.rep <- as.numeric(unlist(lapply(strsplit(cfu.counts$sample, '-'), '[', 3)))
+cfu.counts$tech.rep <- unlist(lapply(strsplit(cfu.counts$sample, '-'), '[', 4))
+cfu.counts$cfus.total <- cfu.counts$cfus / cfu.counts$dilution
+# plated 4 µl, getting cfus per ml
+cfu.counts$cfus.per.ml <- cfu.counts$cfus.total * (1000 / 4)
+# effective population size is the final CFUs per mL corrected for the number of generations the initial population underwent
+# untreated populations inoculated at OD 0.01 = 1E5 CFUs per mL
+# treated populations inoculated at OD 0.1 = 1E6 CFUs per mL
+cfu.counts.minus <- cfu.counts %>% filter(treatment == 'minus')
+cfu.counts.minus$e.cfus.per.ml <- cfu.counts.minus$cfus.per.ml / log2(cfu.counts.minus$cfus.per.ml[1] / 1E6)
+# same correction for treated cells
+cfu.counts.plus <- cfu.counts %>% filter(treatment == 'plus')
+cfu.counts.plus$e.cfus.per.ml <- cfu.counts.plus$cfus.per.ml / log2(cfu.counts.plus$cfus.per.ml[1] / 1E5)
+# recombine data
+cfu.counts <- rbind(cfu.counts.minus, cfu.counts.plus)
+# reading in mutant counts
+mutant.counts <- read_csv(file = '../data/Fig5/fluctuation-assay-mutants.csv')
+# since I plated 100 µl, getting mutants per ml
+mutant.counts$mutants.per.ml <- round(mutant.counts$mutants * 10, digits = 0)
+# merging cfus and mutants
+cfu.data <- as_tibble(merge(cfu.counts, mutant.counts))
+cfu.data$mutant.proportion <- cfu.data$mutants.per.ml / cfu.data$cfus.per.ml
+cfu.data$e.mutant.proportion <- cfu.data$mutants.per.ml / cfu.data$e.cfus.per.ml
+# writing out data
+```
+
+```{r}
+write_csv(cfu.data, file = '../data/Fig5/fluctuation-assay-calculated-data.csv')
+```
+
+```{r}
+# looking at statistical significance
+t.test(x = cfu.data %>% filter(treatment == 'minus') %>% pull(e.mutant.proportion),
+       y = cfu.data %>% filter(treatment == 'plus') %>% pull(e.mutant.proportion))
+
+fold.change <- mean(cfu.data %>% filter(treatment == 'plus') %>% pull(e.mutant.proportion)) /
+  mean(cfu.data %>% filter(treatment == 'minus') %>% pull(e.mutant.proportion))
+
+# function for scientific format labels
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  parse(text=l)
+}
+
+# creating plot for mutant frequency
+freq.plot <- ggplot(cfu.data, aes(x = treatment, y = e.mutant.proportion, color = treatment)) +
+  geom_boxplot(outlier.color = NA, alpha = 0.8) +
+  geom_jitter(alpha = 0.5, width = 0.1, shape = 21, fill = 'white') +
+  xlab('') + ylab('Frequency of INHR acquisition\nwithin population') +
+  scale_y_continuous(labels = fancy_scientific, transform = 'log10') +
+  scale_color_manual(values = c('blue', 'coral')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+```{r}
+print(paste('By direct counting of mutant proportion, wildtype pretreated with CHx gains INH resistance ', round(fold.change, digits = 4), '-fold more frequently than untreated', sep = ''))
+```
+
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig5-panel-e.pdf', width = 3, height = 6.5)
+print(freq.plot)
+dev.off()
+```
+
+**Figure 4 Panel E**
+```{r}
+freq.plot
+```
+
+```{r}
+# now looking at mutation rates calculated by FALCOR
+# https://lianglab.brocku.ca/FALCOR/
+rate.data <- read_csv(file = '../data/Fig5/falcor-rates.csv')
+rate.data$treatment <- unlist(lapply(strsplit(rate.data$strain, '-'), '[', 2))
+
+mss.mle.fold.change <- rate.data$rate[2] / rate.data$rate[1]
+
+# INHR acquisition rate
+mss.mle <- ggplot(rate.data, aes(x = treatment, y = rate)) +
+  geom_errorbar(aes(ymin = rate - lower.dif, ymax = rate + upper.dif, color = treatment), width = 0.15) +
+  geom_point(aes(color = treatment), size = 3) +
+  xlab('') + ylab('MSS-MLE INHR acquisition rate\n(10^-7 per generation)') +
+  scale_color_manual(values = c('blue', 'coral')) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+print(paste('By MSS-MLE, wildtype pretreated with CHx gains INH resistance ', round(mss.mle.fold.change, digits = 4), '-fold more frequently than untreated', sep = ''))
+```
+
+
+```{r}
+# generating figure
+pdf(file = '../figures/figure-panels/fig5-panel-f.pdf', width = 3, height = 6.5)
+print(mss.mle)
+dev.off()
+```
+
+**Figure 4 Panel F**
+```{r}
+mss.mle
+```
+
+Next, analyzing data from cumene hydroperoxide dose response assays for supplemental figure
+
+```{r}
+# function for converting time
+convert.time <- function(time.vector) {
+  new.out <- c()
+  for(x in time.vector)
+  {
+    temporal.vector <- strsplit(x,split = ":")[[1]]
+    new.out <- c(new.out, as.numeric(temporal.vector[1]) + ((as.numeric(temporal.vector[3]) +
+                                                               (60*as.numeric(temporal.vector[2])))/3600))
+  }
+  new.out <- round(new.out, digits = 3)
+  new.out
+}
+```
+
+```{r}
+suppressMessages(raw.data <- read_csv(file = '../data/Fig5/wt-ohrR-CHx-dose-response-assay.csv'))
+raw.data$Time <- convert.time(as.character(raw.data$Time))
+###############################################################################
+blanks <- startsWith(names(raw.data), prefix = 'blank')
+blank.data <- cbind(raw.data$Time, raw.data[, blanks, drop = FALSE])
+suppressMessages(blank.data[, 2:ncol(blank.data)] <- replace_with_na_all(blank.data[, 2:ncol(blank.data)], condition = ~.x > 0.10))
+names(blank.data)[1] <- 'time'
+blank.avg <- rowMeans(blank.data[, c(2:ncol(blank.data))], na.rm = T)
+# reformatting growth data to be more easily plot-able and usable
+samples <- !startsWith(names(raw.data), prefix = 'blank')
+expt.data <- cbind(raw.data[, samples, drop = FALSE])
+names(expt.data) <- c('time', names(expt.data[2:ncol(expt.data)]))
+# subtracting off blanks
+expt.data[2:ncol(expt.data)] <- expt.data[2:ncol(expt.data)] - blank.avg
+curve.data <- reshape2::melt(expt.data, measure.vars = colnames(expt.data)[2:ncol(expt.data)])
+names(curve.data) <- c('time', 'sample', 'od')
+curve.data$sample <- as.character(curve.data$sample)
+sample.info <- strsplit(curve.data$sample, '-')
+#############################################################################
+curve.data$strain <- unlist(lapply(sample.info, '[', 1))
+curve.data$rep <- unlist(lapply(sample.info, '[', 2))
+curve.data$challenge <- unlist(lapply(sample.info, '[', 3))
+curve.data$`concentration (µM)` <- as.factor(as.numeric(unlist(lapply(sample.info, '[', 4))))
+curve.data$label <- paste(curve.data$strain, ', Rep. ', curve.data$rep, sep = '')
+curve.data <- curve.data %>% dplyr::select(time, strain, rep, label, challenge, `concentration (µM)`, od)
+curve.data <- curve.data %>% filter(time <= 72)
+
+# getting averages to also plot
+curve.data.avgs <- curve.data %>%
+  group_by(time, strain, challenge, `concentration (µM)`) %>%
+  summarise(avg.od = mean(od), stdev.od = sd(od))
+
+curve.data.avgs$strain <- factor(curve.data.avgs$strain, levels = c('WT', 'ohrR'))
+curve.data.avgs$concentration.label <- paste(curve.data.avgs$`concentration (µM)`, ' µM ', curve.data.avgs$challenge, sep = '')
+```
+
+```{r}
+growth.curves <- ggplot(curve.data.avgs, aes(x = time, y = avg.od, group = interaction(strain, `concentration (µM)`), color = `concentration (µM)`)) +
+  geom_point(size = 0.5) +
+  geom_line() +
+  geom_errorbar(aes(ymin = avg.od - stdev.od, ymax = avg.od + stdev.od), width = 0.2, alpha = 0.2) +
+  xlab('time (hours)') + ylab(bquote(OD[600])) +
+  facet_wrap(~strain, nrow = 1) +
+  theme_minimal() +
+  plot.theme +
+  theme(strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig5-a.pdf', height = 4, width = 8)
+print(growth.curves)
+dev.off()
+```
+
+**Figure S5**
+
+```{r}
+print(growth.curves)
+```
+
+Generating dose response curves
+
+```{r}
+# using growthcurver
+gc.data <- SummarizeGrowthByPlate(plate = expt.data %>% filter(time <= 48))
+sample.info <- strsplit(gc.data$sample, '-')
+#############################################################################
+# extracting information from sample column
+gc.data$strain <- unlist(lapply(sample.info, '[', 1))
+gc.data$rep <- unlist(lapply(sample.info, '[', 2))
+gc.data$challenge <- unlist(lapply(sample.info, '[', 3))
+gc.data$`concentration (µM)` <- as.numeric(unlist(lapply(sample.info, '[', 4)))
+gc.data$label <- paste(gc.data$strain, '-', gc.data$rep, sep = '')
+challenges <- c('CHX')
+
+ic50.tables <- list()
+rg.tables <- list()
+pred.tables <- list()
+for (c in 1:length(challenges)) {
+  data <- gc.data %>% filter(challenge == challenges[c])
+  unique.samples <- unique(data$label)
+  sampling.freq <- 1e-2
+  concentration.range <- seq(sampling.freq, (max(data$`concentration (µM)`) * 2), by = sampling.freq)
+  ic50.table.list <- list()
+  rg.tables.list <- list()
+  pred.tables.list <- list()
+  
+  for (s in 1:length(unique.samples)) {
+    sample.data <- data %>% filter(label == unique.samples[s])
+    sample.data$rg <- sample.data$auc_e / sample.data$auc_e[1]
+    # save rg data to list
+    rg.tables.list[[s]] <- sample.data
+    # writing logic to catch data that doesn't reach 50% relative growth (ie. very resistant)
+    # using a higher cutoff since log models still get fit properly even with > 85% growth at highest concentration
+    if (tail(sample.data$rg, n = 1) >= 0.85) {
+      inferred.ic50 <- max(concentration.range)
+    }
+    else {
+      # fitting a log model
+      log.model <- drm(rg ~ `concentration (µM)`, data = sample.data, fct = LL.4(fixed = c(NA, 0, 1, NA)))
+      pred.growth <- predict(object = log.model, newdata = data.frame(concentration.range))
+      pred.table <- data.frame(x = concentration.range, y = pred.growth)
+      pred.table$label <- unique.samples[s]
+      # save predictions to a new table for plotting
+      pred.tables.list[[s]] <- tibble(label = pred.table$label, challenge = challenges[c],
+                                      concentration = pred.table$x, pred.growth = pred.table$y)
+      # extracting IC50 value
+      inferred.ic50 <- pred.table$x[which.min(abs(pred.table$y - 0.50))]
+      
+      if (inferred.ic50 == sampling.freq) {
+        inferred.ic50 <- max(concentration.range)
+      }
+      else {
+        inferred.ic50 <- inferred.ic50
+      }
+    }
+    ic50.table.list[[s]] <- tibble(label = unique.samples[s], challenge = challenges[c], ic50 = inferred.ic50)
+    print(paste(unique.samples[s], ' ', challenges[c],  ' IC50 = ', inferred.ic50, sep = ''))
+  }
+  ic50.tables[[c]] <- do.call(rbind, ic50.table.list)
+  rg.tables[[c]] <- do.call(rbind, rg.tables.list)
+  pred.tables[[c]] <- do.call(rbind, pred.tables.list)
+}
+```
+
+```{r}
+# formatting ic50 data
+ic50.data <- do.call(rbind, ic50.tables)
+ic50.data$strain <- unlist(lapply(strsplit(ic50.data$label, '-'), '[', 1))
+ic50.data$rep <- unlist(lapply(strsplit(ic50.data$label, '-'), '[', 2))
+ic50.data$strain <- factor(ic50.data$strain, levels = c('WT', 'ohrR'))
+ic50.avgs <- ic50.data %>% group_by(strain) %>%
+  summarise(avg.ic50 = mean(ic50), sd.ic50 = sd(ic50))
+ic50.avgs$strain <- factor(ic50.avgs$strain, levels = c('WT', 'ohrR'))
+# formatting relative growth data
+rg.data <- do.call(rbind, rg.tables)
+rg.data$strain <- unlist(lapply(strsplit(rg.data$label, '-'), '[', 1))
+rg.data$rep <- unlist(lapply(strsplit(rg.data$label, '-'), '[', 2))
+rg.data$strain <- factor(rg.data$strain, levels = c('WT', 'ohrR'))
+
+# formatting prediction data
+pred.data <- do.call(rbind, pred.tables)
+pred.data$strain <- unlist(lapply(strsplit(pred.data$label, '-'), '[', 1))
+pred.data$rep <- unlist(lapply(strsplit(pred.data$label, '-'), '[', 2))
+pred.data$strain <- factor(pred.data$strain, levels = c('WT', 'ohrR'))
+```
+
+```{r}
+# plotting dose response curves along with data
+dose.response.curves <- ggplot(rg.data %>% filter(`concentration (µM)` != 0), aes(x = `concentration (µM)`, y = rg, group = rep, color = rep)) +
+  geom_point(alpha = 0.5) +
+  geom_line(alpha = 0.5, linetype = 'dashed') +
+  geom_line(data = pred.data, aes(x = concentration, y = pred.growth, group = rep)) +
+  geom_text(data = ic50.avgs, aes(x = avg.ic50 - 120, y = 0.5,
+                                  label = paste('IC50 =\n', round(ic50.avgs$avg.ic50, digits = 2), '\n± ', round(ic50.avgs$sd.ic50, digits = 2), ' µM', sep = '')),
+            inherit.aes = F) +
+  geom_point(data = ic50.avgs, aes(x = avg.ic50, y = 0.5), inherit.aes = F, shape = 4) +
+  scale_x_log10(labels = trans_format('log10', math_format(10^.x))) +
+  xlab('Cumene hydroperoxide (µM)') + ylab('Relative growth') +
+  facet_wrap(~strain, nrow = 1) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig5-b.pdf', height = 4, width = 8)
+print(dose.response.curves)
+dev.off()
+```
+**Figure S5**
+
+```{r}
+print(dose.response.curves)
+```
+
+
+Next, analyzing dose response data of isolates from CHx pretreatment INH fluctuation assay from above
+
+Code below is nearly identical to code from above, only this time using INH dose escalation
+
+```{r}
+growth.curve.data.tables <- list()
+# growth.curve.plots <- list()
+expt.data.list <- list()
+
+suppressMessages(
+  for (d in 1:3) {
+  raw.data <- read_csv(file = paste('../data/Fig5/CHx-INHR-isolates-INH-dose-response-batch-', d, '.csv', sep = ''))
+  raw.data$Time <- convert.time(as.character(raw.data$Time))
+  ###############################################################################
+  blanks <- startsWith(names(raw.data), prefix = 'blank')
+  blank.data <- cbind(raw.data$Time, raw.data[, blanks, drop = FALSE])
+  blank.data[, 2:ncol(blank.data)] <- replace_with_na_all(blank.data[, 2:ncol(blank.data)], condition = ~.x > 0.10)
+  names(blank.data)[1] <- 'time'
+  blank.avg <- rowMeans(blank.data[, c(2:ncol(blank.data))], na.rm = T)
+  # reformatting growth data to be more easily plot-able and usable
+  samples <- !startsWith(names(raw.data), prefix = 'blank')
+  expt.data <- cbind(raw.data[, samples, drop = FALSE])
+  names(expt.data) <- c('time', names(expt.data[2:ncol(expt.data)]))
+  # subtracting off blanks
+  expt.data[2:ncol(expt.data)] <- expt.data[2:ncol(expt.data)] - blank.avg
+  expt.data.list[[d]] <- expt.data
+  curve.data <- reshape2::melt(expt.data, measure.vars = colnames(expt.data)[2:ncol(expt.data)])
+  names(curve.data) <- c('time', 'sample', 'od')
+  curve.data$sample <- as.character(curve.data$sample)
+  sample.info <- strsplit(curve.data$sample, '-')
+  # compiling data for growth curves
+  curve.data$strain <- unlist(lapply(sample.info, '[', 1))
+  curve.data$rep <- unlist(lapply(sample.info, '[', 2))
+  curve.data$`isoniazid (µg/mL)` <- as.factor(as.numeric(unlist(lapply(sample.info, '[', 3))))
+  curve.data$label <- paste(curve.data$strain, ', Rep. ', curve.data$rep, sep = '')
+  curve.data <- curve.data %>% dplyr::select(time, strain, rep, label, `isoniazid (µg/mL)`, od)
+  curve.data <- curve.data %>% filter(time <= 72)
+  
+  growth.curve.data.tables[[d]] <- curve.data
+}
+)
+```
+
+```{r}
+# combining growth curve data for single plot
+all.curve.data <- do.call(rbind, growth.curve.data.tables)
+# getting averages to also plot
+curve.data.avgs <- all.curve.data %>%
+  group_by(time, strain, `isoniazid (µg/mL)`) %>%
+  summarise(avg.od = mean(od), stdev.od = sd(od))
+
+growth.curves <- ggplot(curve.data.avgs, aes(x = time, y = avg.od, group = interaction(strain, `isoniazid (µg/mL)`), color = `isoniazid (µg/mL)`)) +
+  geom_point(size = 0.5) +
+  geom_line() +
+  geom_errorbar(aes(ymin = avg.od - stdev.od, ymax = avg.od + stdev.od), width = 0.2, alpha = 0.2) +
+  xlab('time (hours)') + ylab(bquote(OD[600])) +
+  facet_wrap(~strain, nrow = 4) +
+  theme_minimal() +
+  plot.theme +
+  theme(strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig6-a.pdf', height = 8, width = 10)
+print(growth.curves)
+dev.off()
+```
+
+Generating dose response curves
+
+```{r}
+gc.data.list <- list()
+ic50.tables <- list()
+rg.tables <- list()
+pred.tables <- list()
+
+suppressWarnings(
+  for (e in 1:3) {
+  # using growthcurver
+  gc.data <- SummarizeGrowthByPlate(plate = expt.data.list[[e]] %>% filter(time <= 48))
+  sample.info <- strsplit(gc.data$sample, '-')
+  #############################################################################
+  # extracting information from sample column
+  gc.data$strain <- unlist(lapply(sample.info, '[', 1))
+  gc.data$rep <- unlist(lapply(sample.info, '[', 2))
+  gc.data$`isoniazid (µg/mL)` <- as.numeric(unlist(lapply(sample.info, '[', 3)))
+  gc.data$label <- paste(gc.data$strain, '-', gc.data$rep, sep = '')
+  gc.data.list[[e]] <- gc.data
+  
+  unique.samples <- unique(gc.data$label)
+  sampling.freq <- 1e-2
+  concentration.range <- seq(sampling.freq, (max(gc.data$`isoniazid (µg/mL)`) * 2), by = sampling.freq)
+  
+  ic50.table.list <- list()
+  rg.tables.list <- list()
+  pred.tables.list <- list()
+  
+  for (s in 1:length(unique.samples)) {
+    sample.data <- gc.data %>% filter(label == unique.samples[s])
+    sample.data$rg <- sample.data$auc_e / sample.data$auc_e[1]
+    # save rg data to list
+    rg.tables.list[[s]] <- sample.data
+    # writing logic to catch data that doesn't reach 50% relative growth (ie. very resistant)
+    # using a higher cutoff since log models still get fit properly even with > 85% growth at highest concentration
+    if (tail(sample.data$rg, n = 1) >= 0.85) {
+      inferred.ic50 <- max(concentration.range)
+    }
+    else {
+      # fitting a log model
+      log.model <- drm(rg ~ `isoniazid (µg/mL)`, data = sample.data, fct = LL.4(fixed = c(NA, 0, 1, NA)))
+      pred.growth <- predict(object = log.model, newdata = data.frame(concentration.range))
+      pred.table <- data.frame(x = concentration.range, y = pred.growth)
+      pred.table$label <- unique.samples[s]
+      # save predictions to a new table for plotting
+      pred.tables.list[[s]] <- tibble(label = pred.table$label,
+                                      `isoniazid (µg/mL)` = pred.table$x, pred.growth = pred.table$y)
+      # extracting IC50 value
+      inferred.ic50 <- pred.table$x[which.min(abs(pred.table$y - 0.50))]
+      
+      if (inferred.ic50 == sampling.freq) {
+        inferred.ic50 <- max(concentration.range)
+      }
+      else {
+        inferred.ic50 <- inferred.ic50
+      }
+    }
+    ic50.table.list[[s]] <- tibble(label = unique.samples[s], ic50 = inferred.ic50)
+    print(paste(unique.samples[s], ' INH',  ' IC50 = ', inferred.ic50, sep = ''))
+  }
+  # collecting data from each assay
+  ic50.tables[[e]] <- do.call(rbind, ic50.table.list)
+  rg.tables[[e]] <- do.call(rbind, rg.tables.list)
+  pred.tables[[e]] <- do.call(rbind, pred.tables.list)
+}
+)
+```
+
+```{r}
+# formatting ic50 data
+ic50.data <- do.call(rbind, ic50.tables)
+ic50.data$strain <- unlist(lapply(strsplit(ic50.data$label, '-'), '[', 1))
+ic50.data$rep <- unlist(lapply(strsplit(ic50.data$label, '-'), '[', 2))
+ic50.avgs <- ic50.data %>% group_by(strain) %>%
+  summarise(avg.ic50 = mean(ic50), sd.ic50 = sd(ic50))
+# formatting relative growth data
+rg.data <- do.call(rbind, rg.tables)
+rg.data$strain <- unlist(lapply(strsplit(rg.data$label, '-'), '[', 1))
+rg.data$rep <- unlist(lapply(strsplit(rg.data$label, '-'), '[', 2))
+
+# formatting prediction data
+pred.data <- do.call(rbind, pred.tables)
+pred.data$strain <- unlist(lapply(strsplit(pred.data$label, '-'), '[', 1))
+pred.data$rep <- unlist(lapply(strsplit(pred.data$label, '-'), '[', 2))
+```
+
+```{r}
+# plotting dose response curves along with data
+dose.response.curves <- ggplot(rg.data %>% filter(`isoniazid (µg/mL)` != 0), aes(x = `isoniazid (µg/mL)`, y = rg, group = rep, color = rep)) +
+  geom_point(alpha = 0.5) +
+  geom_line(alpha = 0.5, linetype = 'dashed') +
+  geom_line(data = pred.data, aes(x = `isoniazid (µg/mL)`, y = pred.growth, group = rep)) +
+  geom_text(data = ic50.avgs, aes(x = 0.2, y = 0.4,
+                                  label = paste('IC50 = ', round(ic50.avgs$avg.ic50, digits = 2), '\n± ', round(ic50.avgs$sd.ic50, digits = 2), ' µg/mL', sep = '')),
+            inherit.aes = F, size = 3) +
+  geom_point(data = ic50.avgs, aes(x = avg.ic50, y = 0.5), inherit.aes = F, shape = 4, size = 2) +
+  scale_x_log10(labels = trans_format('log10', math_format(10^.x))) +
+  xlab('Isoniazid (µg/mL)') + ylab('Relative growth') +
+  facet_wrap(~strain, nrow = 4) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none',
+        strip.text = element_text(size = 12))
+```
+
+```{r}
+# generating figure
+pdf(file = '../supplemental-figures/figure-panels/fig6-b.pdf', height = 8, width = 10)
+print(dose.response.curves)
+dev.off()
+```
+
+```{r}
+# lastly, generating a relative fitness vs. ic50 fold change figure with respect to the wildtype
+auc.data <- rg.data %>% filter(`isoniazid (µg/mL)` == 0) %>% dplyr::select(sample, strain, rep, label, auc_e)
+
+wt.avg.ic50 <- mean(ic50.data %>% filter(strain %in% c('WT1', 'WT2', 'WT3')) %>% pull(ic50))
+wt.avg.auc <- mean(auc.data %>% filter(strain %in% c('WT1', 'WT2', 'WT3')) %>% pull(auc_e))
+
+fitness.data.list <- list()
+ic50.fc.data.list <- list()
+
+unique.isolates <- unique(auc.data$label)
+for (i in 1:length(unique.isolates)) {
+  sample <- unique.isolates[i]
+  sample.ic50 <- ic50.data %>% filter(label == unique.isolates[i]) %>% pull(ic50)
+  sample.ic50.fc <- (sample.ic50 / wt.avg.ic50)
+  ic50.fc.data.list[[i]] <- tibble(label = sample, ic50.fc = sample.ic50.fc)
+  
+  sample.auc <- auc.data %>% filter(label == unique.isolates[i]) %>% pull(auc_e)
+  sample.fitness <- (sample.auc / wt.avg.auc)
+  fitness.data.list[[i]] <- tibble(label = sample, fitness = sample.fitness)
+}
+
+ic50.fc.data <- do.call(rbind, ic50.fc.data.list)
+fitness.data <- do.call(rbind, fitness.data.list)
+
+relative.data <- left_join(ic50.fc.data, fitness.data)
+relative.data$strain <- unlist(lapply(strsplit(relative.data$label, '-'), '[', 1))
+relative.data$rep <- unlist(lapply(strsplit(relative.data$label, '-'), '[', 2))
+
+relative.data.avg <- relative.data %>%
+  group_by(strain) %>%
+  summarise(avg.ic50.fc = mean(ic50.fc), se.ic50.fc = (sd(ic50.fc) / 2), avg.fitness = mean(fitness), se.fitness = (sd(fitness) / 2))
+relative.data.avg$strain <- factor(relative.data.avg$strain, levels = c('WT1', 'WT2', 'WT3',
+                                                                        'A1', 'A2', 'A3', 'A4',
+                                                                        'B1', 'B2', 'B3', 'B4',
+                                                                        'C1', 'C2', 'C3', 'C4'))
+```
+
+```{r}
+# generating figure for ic50 fold change vs. fitness
+resistance.fc <- 0.4 / 0.06
+# also including line for limit of detection
+lod <- max(rg.data$`isoniazid (µg/mL)`)
+strain.colors <- c('gray25', 'gray30', 'gray35',
+                   'red1', 'red2', 'red3', 'red4',
+                   'blue1', 'blue2', 'blue3', 'blue4',
+                   'purple1', 'purple2', 'purple3', 'purple4')
+
+# creating figure for relative fitness vs ic50 fold change
+resistance.fitness.plot <- ggplot(relative.data.avg, aes(x = avg.ic50.fc, y = avg.fitness, fill = strain, label = strain)) +
+  geom_vline(xintercept = resistance.fc, linetype = 'dashed', color = 'red3') +
+  geom_vline(xintercept = lod, linetype = 'dashed', color = 'gray20') +
+  geom_point(alpha = 0.9, shape = 21, size = 2, color = 'black') +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       xmin = avg.ic50.fc - se.ic50.fc, xmax = avg.ic50.fc + se.ic50.fc, 
+                                       color = strain), width = 0.0075, alpha = 0.4) +
+  geom_errorbar(aes(x = avg.ic50.fc, y = avg.fitness,
+                                       ymin = avg.fitness - se.fitness, ymax = avg.fitness + se.fitness,
+                                       color = strain), width = 0.025, alpha = 0.4) +
+  geom_label_repel(aes(color = strain),
+                   box.padding = 0.15, point.padding = 0, segment.color = 'black', fill = 'white',
+                   size = 4, min.segment.length = 0, force = 50) +
+  scale_x_log10() +
+  xlab(bquote(Isoniazid~IC[50]~fold~change~WRT~parental~wildtype)) + 
+  ylab('Relative fitness WRT parental wildtype') +
+  scale_color_manual(values = strain.colors) +
+  scale_fill_manual(values = strain.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+pdf(file = '../supplemental-figures/figure-panels/fig6-c.pdf', height = 4, width = 10)
+print(resistance.fitness.plot)
+dev.off()
+```

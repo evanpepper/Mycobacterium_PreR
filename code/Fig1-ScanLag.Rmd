@@ -1,0 +1,767 @@
+---
+title: "Figure 1 Notebook: ScanLag"
+output: html_notebook
+---
+
+**Author: Evan Pepper-Tunick**
+
+Last updated: Nov 19, 2025
+
+This notebook is for analyzing the data generated in the ScanLag experiments using wildtype *M. smegmatis* mc2155. Also included is the analysis of the growth of the isolates chosen from the ScanLag experiment. ScanLag is a technology originally developed in the Balaban lab (10.1038/nmeth.1485) by Levin-Reisman et al. 2010.
+
+ScanLag data read into this notebook has been modified to exclude erroneous colony assignments in the ScanLag image analysis, due to the image analysis and colony identification process occasionally assigning more (2+) or less (0) colonies as one individual colony.
+
+The raw ScanLag data was generated using ScanLag_Analysis.ipynb
+
+**Important note: to run notebook, user's computer must have ≥ 2.0 GB memory**
+
+```{r}
+# importing necessary libraries
+{
+  library(ggplot2)
+  library(ggridges)
+  library(growthcurver)
+  library(tidyverse)
+  library(purrr)
+  library(drc)
+  library(knitr)
+  library(factoextra)
+  library(naniar)
+  library(rstatix)
+  library(ggpubr)
+  library(scales)
+}
+
+# setting plot theme attributes
+plot.theme <- theme(title = element_text(size = 14),
+                    axis.text = element_text(size = 12),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_text(size = 14),
+                    legend.text = element_text(size = 10),
+                    strip.text = element_text(size = 10))
+
+# setting colors for each cluster of phenotypically distinct colonies
+cluster.colors <- c('gray', '#F8766D', '#00BA38', '#619CFF')
+treated.cluster.colors <- c('#F8766D', '#00BA38', '#619CFF')
+```
+
+```{r message = FALSE}
+# reading in data from two independent experiments
+sl.expt.1 <- read_csv(file = '../data/Fig1/scanlag-experiment-1.csv', col_types = cols())
+sl.expt.2 <- read_csv(file = '../data/Fig1/scanlag-experiment-2.csv', col_types = cols())
+sl.data <- rbind(sl.expt.1, sl.expt.2)
+# data from first 4 hours of experiment is subject to substantial noise, removing data
+# filtering out data not relevant for this analysis, retaining only INH treated and untreated data
+sl.data.filtered <- sl.data %>% filter(time >= 4, experiment %in% c(NA, 'I'))
+```
+
+Next, we want to estimate the time of appearance (toa), growth rate (r), and final colony size (cs) for each colony
+
+```{r}
+# getting vector of unique colony names to iterate over
+unique.colonies <- unique(sl.data.filtered$colony.label)
+# empty list to store toa, r, cs for each colony
+metric.list <- list()
+plot.list <- list()
+sampling.frequency <- 1e-2
+for (i in 1:length(unique.colonies)) {
+  # selecting the colony of interest from entire data
+  growth.data <- sl.data.filtered %>% filter(colony.label == unique.colonies[i])
+  # removing NAs from data
+  growth.data <- growth.data[!is.na(growth.data %>% pull(colony.label)), ]
+  # smoothing data with smooth.spline
+  smooth <- smooth.spline(x = growth.data$time, y = growth.data$growth, spar = 0.6)
+  # storing smoothed data in dataframe
+  smooth.data <- tibble(time = smooth$x,
+                        growth = growth.data$growth,
+                        pred.growth = smooth$y)
+  # fixing data by subtracting off minimum value from all measurements
+  smooth.data <- smooth.data %>%
+    mutate_at(vars(-matches('time')), function(x) x - min(smooth.data$pred.growth))
+  # using the smooth spline function to predict growth over the time period
+  prediction <- predict(object = smooth, x = data.frame(seq(0, (max(smooth.data$time)),
+                                                            by = sampling.frequency)), deriv = 0)
+  pred.table <- data.frame(x = prediction$x, y = prediction$y)
+  names(pred.table) <- c('time', 'pred.growth')
+  # getting first derivative data
+  first.deriv.data <- predict(object = smooth, x = data.frame(seq(0, (max(smooth.data$time)),
+                                                                  by = sampling.frequency)), deriv = 1)
+  # getting max rate and time of max rate
+  r <- max(first.deriv.data$y)
+  cs <- max(prediction$y)
+  # setting toa threshold to when first derivative is ≥ 0.2 the max growth rate
+  deriv.threshold <- 0.2 * r
+  # getting toa value
+  toa <- ( ( min(which(first.deriv.data$y > deriv.threshold)) /
+               as.numeric(rownames(tail(first.deriv.data$y, 1))) ) * max(smooth.data$time) ) - 4 #hours
+  # saving growth rate, carrying capacity, and toa to tibble
+  metrics <- tibble(colony.label = unique.colonies[i],
+                    r = r,
+                    cs = cs,
+                    toa = toa)
+  # calculating distance for plotting slope line of max rate
+  run <- max(smooth.data$time) - (cs / r)
+  metric.list[[i]] <- metrics
+  
+  # creating plot and saving it to list for inspection
+  growth.curve <- ggplot(data = smooth.data, aes(x = time, y = growth)) +
+    geom_point(size = 1, alpha = 0.3) +
+    geom_line(aes(x = time, y = pred.growth)) +
+    geom_point(x = toa, y = smooth.data[[which.min(abs(toa - smooth.data$time)), 'growth']],
+               color = 'green4', shape = 4, size = 2, stroke = 2) +
+    annotate("text", x = (toa - 8), y = (0.10 * max(smooth.data$pred.growth)),
+             label = paste('toa: ', round(toa, digits = 1), ' hours', sep = ''), color = 'green4', size = 4) +
+    geom_point(x = max(smooth.data$time), y = cs, color = 'blue', shape = 4, size = 2, stroke = 2) +
+    annotate("text", x = (max(smooth.data$time) - 12), y = (0.95 * cs),
+             label = paste('colony size:\n', format(cs, scientific = TRUE, digits = 3), ' pixels', sep = ''),
+             color = 'blue', size = 4) +
+    annotate("segment", x = run, xend = max(smooth.data$time), y = 0, yend = cs, color = 'red',
+             linetype = 'dashed') +
+    annotate("text", x = (run + 10), y = (0.2 * max(smooth.data$pred.growth)),
+             label = paste('max rate:\n', round(r, digits = 2), sep = ''), color = 'red', size = 4) +
+    ggtitle(paste('colony', unique.colonies[i], sep = ' ')) +
+    xlab('time (hours)') + ylab('growth (pixels)') +
+    theme_minimal() +
+    plot.theme
+  
+  plot.list[[i]] <- growth.curve
+}
+# row binding all colony metrics
+colony.metrics <- do.call(rbind, metric.list)
+```
+
+```{r}
+# plotting some randomly selected colonies as a sanity check
+colony.sample <- sample(c(1:length(unique.colonies)), size = 4, replace = F)
+plot.list.sample <- list(plot.list[[colony.sample[1]]],
+                         plot.list[[colony.sample[2]]],
+                         plot.list[[colony.sample[3]]],
+                         plot.list[[colony.sample[4]]])
+# plotting sample data
+walk(plot.list.sample, print)
+```
+
+Next, we want to use toa, r, and cs to cluster colonies based on their growth phenotype.
+This will be done using k-means clustering, with k = 3
+
+```{r}
+# resetting column names of data
+colony.metrics$line <- unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 1))
+colony.metrics$experiment <- unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 2))
+colony.metrics$time.point <- unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 3))
+colony.metrics$treatment <- unlist(lapply(strsplit(
+  unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 4)), '_'), '[', 1))
+# filtering data for clustering to only include treated samples on antibiotic plates
+treated.data <- colony.metrics %>%
+  filter(treatment == 'plus', time.point == 'post')
+# also gathering untreated data
+untreated.data <- colony.metrics %>%
+  filter(treatment == 'minus')
+# extracting data for clustering
+cluster.data <- data.frame(treated.data) %>%
+  dplyr::select(colony.label, r, cs, toa)
+# setting rownames
+rownames(cluster.data) <- cluster.data$colony.label
+# retaining only metrics
+cluster.data <- cluster.data[, 2:4]
+# scale each variable to have a mean of 0 and sd of 1
+cluster.data <- scale(cluster.data)
+# make this example reproducible
+set.seed(42)
+# perform k-means clustering with k = 3 clusters
+k = 3
+km <- kmeans(cluster.data, centers = k, nstart = 25)
+# clustering plot
+cluster.plot <- fviz_cluster(km, data = cluster.data, geom = 'point', ggtheme = theme_minimal(),
+                             main = '') + plot.theme
+```
+
+```{r}
+# saving plot as pdf
+pdf(file = '../figures/figure-panels/fig1-panel-a.pdf', height = 4, width = 6)
+print(cluster.plot)
+dev.off()
+```
+
+
+**Figure 1 Panel A**
+```{r}
+cluster.plot
+```
+
+```{r}
+# adding cluster assignment back to colony metric data for treated samples
+treated.data$Cluster <- as.character(km$cluster)
+# adding colony assignment of 0 to untreated data
+untreated.data$Cluster <- 'Untreated'
+# merging all data with cluster assignments together
+clusters <- rbind(treated.data, untreated.data)
+# swapping cluster 1 with cluster 3, and vice versa (cluster 1 should be early growers)
+clusters <- clusters %>% mutate(Cluster = case_when(Cluster == '1' ~ '3',
+                                                    Cluster == '3' ~ '1',
+                                                    Cluster == '2' ~ '2',
+                                                    Cluster == 'Untreated' ~ 'Untreated'))
+# factorizing cluster assignment
+clusters$Cluster <- factor(clusters$Cluster, levels = c('Untreated', '1', '2', '3'))
+clusters$colony <- as.numeric(unlist(lapply(strsplit(clusters$colony.label, '_'), '[', 2)))
+clusters$strain <- paste(clusters$line, '_', clusters$treatment, '_', clusters$colony, sep = '')
+```
+
+Optional write to file
+```{r}
+write_csv(clusters, file = '../data/Fig1/colony-cluster-assignments.csv')
+```
+
+```{r}
+# adding cluster information back to growth data to plot growth curves
+growth <- sl.data.filtered
+growth <- merge(growth, clusters[, c(1, 9)])
+# getting means of each cluster and plotting
+growth.modified <- growth
+growth.modified$time <- round(growth.modified$time, digits = 0)
+# finding times where not all data is available and removing them
+underrepresented.times <- growth.modified %>%
+  group_by(time) %>% tally() %>% filter(n < nrow(clusters)) %>% pull(time)
+growth.modified <- growth.modified %>% filter(!time %in% underrepresented.times)
+growth.means <- growth.modified %>%
+  group_by(time, Cluster) %>%
+  summarise(mean.growth = mean(growth), stdev = sd(growth))
+
+growth.curves <- ggplot(data = growth.modified,
+                        aes(x = time, y = growth, group = colony.label, color = Cluster)) +
+  geom_line(alpha = 0.04) +
+  geom_line(data = growth.means,
+            aes(x = time, y = mean.growth, group = Cluster, color = Cluster), linewidth = 1.5) +
+  ylim(0, 50000) +
+  xlab('Time (hours)') + ylab('Growth (pixels)') +
+  scale_color_manual(values = cluster.colors) +
+  theme_minimal() +
+  plot.theme
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig1-panel-b.pdf', height = 4, width = 4)
+print(growth.curves)
+dev.off()
+```
+
+
+**Figure 1 Panel B**
+```{r}
+growth.curves
+```
+
+
+```{r}
+# looking only at the time of appearance of each cluster
+toa.plot <- ggplot(data = clusters, aes(x = Cluster, y = toa, fill = Cluster, group = Cluster)) +
+  geom_violin(trim = F, alpha = 0.7) +
+  geom_boxplot(width = 0.05, fill = 'white') +
+  ylab('Time of appearance (hours)') + xlab('Cluster') +
+  ggtitle('') +
+  scale_fill_manual(values = cluster.colors) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  plot.theme
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig1-panel-c.pdf', height = 4, width = 4)
+print(toa.plot)
+dev.off()
+```
+
+
+**Figure 1 Panel C**
+```{r}
+toa.plot
+```
+
+Next, after picking representative colonies from each of the clusters and phenotyping them with a dose response assay,
+we're able to calculate both fitness (uninhibited growth WRT wildtype) and INH IC50
+
+**Important note: assay 1 only had the final OD measured after ~60 hours due to a power outage**
+
+```{r}
+# reading in each dataset from each dose response assay
+kinetic.data <- read_csv(file = '../data/Fig1/dose-response-assay-1.csv',
+                         name_repair = 'minimal', col_types = cols())
+kinetic.data.long <- kinetic.data %>% pivot_longer(cols = everything(), names_to = 'sample', values_to = 'od')
+# getting blank data averages
+blank.data.avg <- mean(kinetic.data.long %>% filter(sample == 'blank') %>% pull(od))
+sample.data <- kinetic.data.long %>% filter(sample != 'blank')
+# subtracting off the blank from all sample ODs
+sample.data$od <- sample.data$od - blank.data.avg
+# splitting sample names into corresponding data
+sample.data$line <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 1))
+sample.data$abx <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 2))
+sample.data$background <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 3))
+sample.data$colony <- as.numeric(unlist(lapply(strsplit(sample.data$sample, '_'), '[', 4)))
+sample.data$concentration <- as.numeric(unlist(lapply(strsplit(sample.data$sample, '_'), '[', 5)))
+sample.data$rep <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 6))
+sample.data$isolate <- paste(
+  sample.data$line, '_', sample.data$background, '_', sample.data$colony, '_', sample.data$rep, sep = '')
+sample.data <- sample.data %>%
+  dplyr::select(line, abx, background, colony, concentration, rep, od, isolate, sample)
+```
+
+The next step is to calculate the relative fitness and INH IC50
+
+```{r}
+unique.samples <- unique(sample.data$isolate)
+sampling.freq <- 1e-2
+concentration.range <- seq(sampling.freq, (max(sample.data$concentration) * 2), by = sampling.freq)
+
+rg.tables.list <- list()
+isolate.metrics.list <- list()
+suppressWarnings(for (s in 1:length(unique.samples)) {
+  selected.data <- sample.data %>% filter(isolate == unique.samples[s])
+  # getting relative growth at each concentration relative to the uninhibited growth
+  selected.data$relative.growth <- selected.data$od / selected.data$od[1]
+  # save rg data to list
+  rg.tables.list[[s]] <- selected.data
+  # writing logic to catch data that doesn't reach 50% relative growth (ie. very resistant)
+  # using a higher cutoff since log models still get fit properly even with > 85% growth at highest concentration
+  if (tail(selected.data$relative.growth, n = 1) >= 0.85) {
+    inferred.ic50 <- max(concentration.range)
+  }
+  else {
+    # fitting a log model
+    log.model <- drm(relative.growth ~ concentration, data = selected.data, fct = LL.4(fixed = c(NA, 0, 1, NA)))
+    pred.growth <- predict(object = log.model, newdata = data.frame(concentration.range))
+    pred.table <- data.frame(x = concentration.range, y = pred.growth)
+    # extracting IC50 value
+    inferred.ic50 <- pred.table$x[which.min(abs(pred.table$y - 0.50))]
+    
+    if (inferred.ic50 == sampling.freq) {
+      inferred.ic50 <- max(concentration.range)
+    }
+    else {
+      inferred.ic50 <- inferred.ic50
+    }
+  }
+  # relative fitness is uninhibited growth vs average untreated control growth from all lines
+  avg.line.wt.od <- mean(sample.data %>%
+                           filter(background == 'minus', concentration == 0) %>% pull(od))
+  relative.fitness <- selected.data$od[1] / avg.line.wt.od
+  # saving ic50 value and relative fitness for each sample
+  isolate.metrics.list[[s]] <- tibble(isolate = unique.samples[s],
+                                      ic50 = inferred.ic50,
+                                      fitness = relative.fitness,
+                                      assay = 1)
+})
+isolate.metrics.1 <- do.call(rbind, isolate.metrics.list)
+```
+
+**The following dose response assays were run as intended, so area under the growth curve (AUC) will be used**
+
+```{r}
+# first creating function for converting time from hours:minutes:seconds to just hours
+# function for converting time
+convert.time <- function(time.vector) {
+  new.out <- c()
+  for(x in time.vector)
+  {
+    temporal.vector <- strsplit(x,split = ":")[[1]]
+    new.out <- c(new.out, as.numeric(temporal.vector[1]) + ((as.numeric(temporal.vector[3]) +
+                                                               (60*as.numeric(temporal.vector[2])))/3600))
+  }
+  new.out <- round(new.out, digits = 3)
+  new.out
+}
+```
+
+```{r}
+assays <- c('2', '3', '4', '5', '6', '7')
+group.metrics <- list()
+
+for (a in 1:length(assays)) {
+  kinetic.data <- read_csv(file = paste('../data/Fig1/dose-response-assay-', assays[a], '.csv', sep = ''),
+                           name_repair = 'minimal', col_types = cols())
+  # converting time units
+  kinetic.data$Time <- convert.time(as.character(kinetic.data$Time))
+  # getting blank data averages, removing any contaminated outliers
+  blanks <- startsWith(names(kinetic.data), prefix = 'blank')
+  blank.data <- cbind(kinetic.data$Time, kinetic.data[, blanks, drop = FALSE])
+  blank.data[, 2:ncol(blank.data)] <- replace_with_na_all(blank.data[, 2:ncol(blank.data)],
+                                                          condition = ~.x > 0.10)
+  names(blank.data)[1] <- 'time'
+  blank.avg <- rowMeans(blank.data[, c(2:ncol(blank.data))], na.rm = T)
+  # reformatting growth data to be more easily plot-able and usable
+  samples <- !startsWith(names(kinetic.data), prefix = 'blank')
+  expt.data <- cbind(kinetic.data[, samples, drop = FALSE])
+  names(expt.data) <- c('time', names(expt.data[2:ncol(expt.data)]))
+  # subtracting off blanks
+  expt.data[2:ncol(expt.data)] <- expt.data[2:ncol(expt.data)] - blank.avg
+  # using the growth curver library to estimate growth curve parameters, including AUC (auc_e)
+  # removing all data after 48 hours, as this is about when WT untreated reaches stationary
+  sample.data <- SummarizeGrowthByPlate(plate = expt.data %>% filter(time <= 48))
+  # splitting sample names into corresponding data
+  sample.data$line <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 1))
+  sample.data$abx <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 2))
+  sample.data$background <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 3))
+  sample.data$colony <- as.numeric(unlist(lapply(strsplit(sample.data$sample, '_'), '[', 4)))
+  sample.data$concentration <- as.numeric(unlist(lapply(strsplit(sample.data$sample, '_'), '[', 5)))
+  sample.data$rep <- unlist(lapply(strsplit(sample.data$sample, '_'), '[', 6))
+  sample.data$isolate <- paste(
+    sample.data$line, '_', sample.data$background, '_', sample.data$colony, '_', sample.data$rep, sep = '')
+  sample.data <- sample.data %>%
+    dplyr::select(line, abx, background, colony, concentration, rep, auc_e, isolate, sample)
+  
+  # The next step is to calculate the relative fitness and INH IC50
+  unique.samples <- unique(sample.data$isolate)
+  sampling.freq <- 1e-2
+  concentration.range <- seq(sampling.freq, (max(sample.data$concentration) * 2), by = sampling.freq)
+  
+  rg.tables.list <- list()
+  isolate.metrics.list <- list()
+  suppressWarnings(for (s in 1:length(unique.samples)) {
+    selected.data <- sample.data %>% filter(isolate == unique.samples[s])
+    # getting relative growth at each concentration relative to the uninhibited growth
+    selected.data$relative.growth <- selected.data$auc_e / selected.data$auc_e[1]
+    # save rg data to list
+    rg.tables.list[[s]] <- selected.data
+    # writing logic to catch data that doesn't reach ≤ 85% relative growth (ie. very resistant)
+    if (tail(selected.data$relative.growth, n = 1) >= 0.85) {
+      inferred.ic50 <- max(concentration.range)
+    }
+    else {
+      # fitting a log model
+      log.model <- drm(relative.growth ~ concentration, data = selected.data,
+                       fct = LL.4(fixed = c(NA, 0, 1, NA)))
+      pred.growth <- predict(object = log.model, newdata = data.frame(concentration.range))
+      pred.table <- data.frame(x = concentration.range, y = pred.growth)
+      # extracting IC50 value
+      inferred.ic50 <- pred.table$x[which.min(abs(pred.table$y - 0.50))]
+      
+      if (inferred.ic50 == sampling.freq) {
+        inferred.ic50 <- max(concentration.range)
+      }
+      else {
+        inferred.ic50 <- inferred.ic50
+      }
+    }
+    # relative fitness is uninhibited growth vs average control growth from all lines
+    avg.line.wt.auc <- mean(sample.data %>%
+                              filter(background == 'minus', concentration == 0) %>% pull(auc_e))
+    relative.fitness <- selected.data$auc_e[1] / avg.line.wt.auc
+    # saving ic50 value and relative fitness for each sample
+    isolate.metrics.list[[s]] <- tibble(isolate = unique.samples[s],
+                                        ic50 = inferred.ic50,
+                                        fitness = relative.fitness,
+                                        assay = as.numeric(assays[a]))
+  })
+  group.metrics[[a]] <- do.call(rbind, isolate.metrics.list)
+}
+isolate.metrics.2 <- do.call(rbind, group.metrics)
+```
+
+```{r}
+# joining all dose response assay data to get IC50 fold change and log2 fold change
+isolate.metrics <- rbind(isolate.metrics.1, isolate.metrics.2)
+# resplitting isolate name into corresponding data
+isolate.metrics$line <- unlist(lapply(strsplit(isolate.metrics$isolate, '_'), '[', 1))
+isolate.metrics$background <- unlist(lapply(strsplit(isolate.metrics$isolate, '_'), '[', 2))
+isolate.metrics$colony <- as.numeric(unlist(lapply(strsplit(isolate.metrics$isolate, '_'), '[', 3)))
+isolate.metrics$rep <- unlist(lapply(strsplit(isolate.metrics$isolate, '_'), '[', 4))
+isolate.metrics$sample <- paste(isolate.metrics$isolate, '_', isolate.metrics$assay, sep = '')
+isolate.metrics <- isolate.metrics %>%
+  dplyr::select(line, background, colony, rep, isolate, sample, assay, ic50, fitness)
+# iterating over every sample to get ic50 fold change WRT the untreated controls
+unique.samples <- unique(isolate.metrics$sample)
+relative.ic50.sample.data <- list()
+for (s in 1:length(unique.samples)) {
+  sample.ic50 <- isolate.metrics %>% filter(sample == unique.samples[s]) %>% pull(ic50)
+  sample.line <- isolate.metrics %>% filter(sample == unique.samples[s]) %>% pull(line)
+  sample.assay <- isolate.metrics %>% filter(sample == unique.samples[s]) %>% pull(assay)
+  avg.wt.ic50 <- mean(isolate.metrics %>%
+                        filter(line == sample.line, assay == sample.assay, background == 'minus') %>% pull(ic50))
+  # calculating ic50 fold change and ic50 log2 fold change
+  relative.ic50.sample.data[[s]] <- tibble(sample = unique.samples[s],
+                                           ic50.fc = sample.ic50 / avg.wt.ic50,
+                                           ic50.log2.fc = log2(sample.ic50 / avg.wt.ic50))
+}
+relative.ic50.data <- do.call(rbind, relative.ic50.sample.data)
+# rejoining with the rest of the isolate data
+isolate.metrics <- full_join(isolate.metrics, relative.ic50.data)
+# now calculating averages for each strain
+isolate.metrics$strain <- paste(
+  isolate.metrics$line, '_', isolate.metrics$background, '_', isolate.metrics$colony, sep = '')
+strain.avgs <- isolate.metrics %>% group_by(strain) %>%
+  summarise(avg.ic50 = mean(ic50),
+            avg.ic50.fc = mean(ic50.fc), sd.ic50.fc = sd(ic50.fc), se.ic50.fc = (sd(ic50.fc) / 2),
+            avg.ic50.log2.fc = mean(ic50.log2.fc), sd.ic50.log2.fc = sd(ic50.log2.fc),
+            avg.fitness = mean(fitness), sd.fitness = sd(fitness), se.fitness = (sd(fitness) / 2))
+```
+
+```{r}
+# reassigning the cluster information to be able to group by cluster or color by cluster
+full.data <- left_join(strain.avgs, clusters)
+# removing duplicated data from joining
+full.data <- full.data[!duplicated(full.data$strain), ]
+```
+
+```{r}
+# next, grouping by cluster and plotting the ic50 log2 fold change and fitness as boxplots
+full.data.treated <- full.data %>% filter(Cluster != 'Untreated')
+full.data.treated$Cluster <- factor(full.data.treated$Cluster, levels = c(1, 2, 3))
+# performing t tests to identify any significant differences between the grouped cluster phenotypes
+ic50.stat.test <- full.data.treated %>%
+  pairwise_t_test(avg.ic50.fc ~ Cluster, paired = F, p.adjust.method = "bonferroni")
+ic50.stat.test <- ic50.stat.test %>% add_xy_position(x = 'Cluster')
+
+fitness.stat.test <- full.data.treated %>%
+  pairwise_t_test(avg.fitness ~ Cluster, paired = F, p.adjust.method = "bonferroni")
+fitness.stat.test <- fitness.stat.test %>% add_xy_position(x = 'Cluster')
+
+# generating ic50 log2 fold change boxplots with stats
+ic50.by.cluster <- ggboxplot(full.data.treated, x = 'Cluster', y = 'avg.ic50.fc',
+          fill = 'Cluster', add = 'jitter',
+          add.params = list(width = 0.2, shape = 21, size = 2, alpha = 0.7)) +
+  stat_pvalue_manual(ic50.stat.test, label = 'p.adj.signif', tip.length = 0.02,
+                     step.increase = 0.005 / (max(full.data.treated$avg.ic50.fc) -
+                                                min(full.data.treated$avg.ic50.fc))) +
+  xlab('Cluster') + ylab('INH IC50 fold change\nWRT untreated controls') +
+  scale_fill_manual(values = treated.cluster.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig1-panel-d.pdf', height = 4, width = 3)
+ic50.by.cluster
+dev.off()
+```
+
+```{r}
+# generating fitness boxplots with stats
+fitness.by.cluster <- ggboxplot(full.data.treated, x = 'Cluster', y = 'avg.fitness',
+          fill = 'Cluster', add = 'jitter',
+          add.params = list(width = 0.2, shape = 21, size = 2, alpha = 0.7)) +
+  stat_pvalue_manual(fitness.stat.test, label = 'p.adj.signif', tip.length = 0.02,
+                     step.increase = 0.015 / (max(full.data.treated$avg.fitness) -
+                                                min(full.data.treated$avg.fitness))) +
+  xlab('Cluster') + ylab('Relative fitness\nWRT untreated controls') +
+  scale_fill_manual(values = treated.cluster.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig1-panel-e.pdf', height = 4, width = 3)
+fitness.by.cluster
+dev.off()
+```
+
+**Figure 1 Panel D and E**
+```{r}
+walk(list(ic50.by.cluster, fitness.by.cluster), print)
+```
+
+
+```{r}
+# getting standard error of all wildtype strains ic50 and fitness
+se.wt.ic50.fc <- sd(full.data %>% filter(treatment == 'minus') %>% pull(avg.ic50.fc)) / 2
+se.wt.fitness <- sd(full.data %>% filter(treatment == 'minus') %>% pull(avg.fitness)) / 2
+# for Mtb, INH drug resistance is defined as an MIC ≥ 0.4 µg/mL
+# Mtb H37Rv has an INH MIC of ~0.06 µg/mL
+# we are defining INH resistance as an equivalent fold change increase in IC50 in Msm
+resistance.fc <- 0.4 / 0.06
+resistance.log2.fc <- log2(0.4 / 0.06)
+# generating plot of ic50 log2 fold change vs relative fitness
+resistance.fitness.plot <- ggplot(
+  full.data %>% filter(treatment == 'plus'), aes(x = avg.ic50.fc, y = avg.fitness, fill = Cluster)) +
+  annotate('rect', xmin = 1 - se.wt.ic50.fc, xmax = 1 + se.wt.ic50.fc,
+           ymin = 1 - se.wt.fitness, ymax = 1 + se.wt.fitness, alpha = 1, fill = 'gray') +
+  geom_point(size = 2, shape = 21, alpha = 0.6) +
+  geom_errorbar(aes(ymin = avg.fitness - se.fitness, ymax = avg.fitness + se.fitness,
+                    color = Cluster), width = 0.025, alpha = 0.3) +
+  geom_errorbar(aes(xmin = avg.ic50.fc - se.ic50.fc, xmax = avg.ic50.fc + se.ic50.fc,
+                    color = Cluster), width = 0.01, alpha = 0.3) +
+  xlab(bquote(Isoniazid~IC[50]~fold~change~WRT~untreated~controls)) + 
+  ylab('Relative fitness\nWRT untreated controls') +
+  scale_fill_manual(values = treated.cluster.colors) +
+  theme_minimal() +
+  plot.theme +
+  theme(legend.position = 'none')
+```
+
+```{r}
+# generating plot
+pdf(file = '../figures/figure-panels/fig1-panel-f.pdf', height = 4, width = 8)
+print(resistance.fitness.plot)
+dev.off()
+```
+
+
+**Figure 1 Panel F**
+```{r}
+resistance.fitness.plot
+```
+
+```{r}
+# performing t tests to check for significant increase in ic50 amongst treated isolates
+wt.data <- isolate.metrics %>% filter(background == 'minus')
+wt.ic50s <- wt.data %>% pull(ic50)
+treated.isolates <- full.data %>% filter(treatment == 'plus') %>% pull(strain)
+n.treated.isolates <- length(treated.isolates)
+llr.treated.isolates <- full.data %>% filter(treatment == 'plus', avg.ic50.fc >= 1.1) %>% pull(strain)
+n.llr.treated.isolates <- length(llr.treated.isolates)
+
+ic50.t.test.results <- list()
+for (i in 1:length(llr.treated.isolates)) {
+  isolate.data <- isolate.metrics %>% filter(strain == llr.treated.isolates[i])
+  isolate.ic50s <- isolate.data %>% pull(ic50)
+  isolate.t.test <- t.test(isolate.ic50s, wt.ic50s, alternative = 'two.sided', var.equal = FALSE)
+  ic50.t.test.results[[i]] <- tibble(isolate = llr.treated.isolates[i],
+                                t.test.p.value = isolate.t.test$p.value)
+}
+
+significant.llrs <- do.call(rbind, ic50.t.test.results)
+significant.llrs$adj.pvalue <- p.adjust(significant.llrs$t.test.p.value, method = 'fdr')
+n.significant.llrs <- nrow(significant.llrs %>% filter(adj.pvalue <= 0.05))
+
+# performing t tests to check for significant increase in fitness amongst treated isolates
+wt.fitness <- wt.data %>% pull(fitness)
+fit.treated.isolates <- full.data %>% filter(treatment == 'plus', avg.fitness >= 1.1) %>% pull(strain)
+n.fit.treated.isolates <- length(fit.treated.isolates)
+
+fitness.t.test.results <- list()
+for (f in 1:length(fit.treated.isolates)) {
+  isolate.data <- isolate.metrics %>% filter(strain == fit.treated.isolates[f])
+  isolate.fitness <- isolate.data %>% pull(fitness)
+  isolate.t.test <- t.test(isolate.fitness, wt.fitness, alternative = 'two.sided', var.equal = FALSE)
+  fitness.t.test.results[[f]] <- tibble(isolate = fit.treated.isolates[f],
+                                t.test.p.value = isolate.t.test$p.value)
+}
+
+significant.fits <- do.call(rbind, fitness.t.test.results)
+significant.fits$adj.pvalue <- p.adjust(significant.fits$t.test.p.value, method = 'fdr')
+n.significant.fits <- nrow(significant.fits %>% filter(adj.pvalue <= 0.05))
+```
+
+
+```{r}
+# extracting data from all isolates corresponding to the mutant strains identified after sequencing
+mutant.strains <- tibble(strain = c('G_plus_8', 'G_plus_16', 'B_plus_12', 'H_plus_4', 'H_plus_8', 'B_plus_103'),
+                         mutation = c('ohrR P4* fs', 'ohrR P4* fs', 'mfs1 G105D',
+                                      'ntaA_5 E50* fs', 'ntaA_5 E50* fs', 'fas1 E177G'))
+mutant.strain.data <- left_join(mutant.strains, full.data)
+# optional write out for data
+# write_csv(mutant.strain.data, file = '../data/Fig1/mutant-strain-phenotypes.csv')
+```
+
+
+Next, mutants *ohrR P4- fs*, *mfs1 G105D*, and *ntaA_5 E50- fs* were subjected to INH tolerance assay
+
+```{r}
+# first reading in spotting assay data containing colony counts
+dt.data.wide <- read_csv(file = '../data/Fig1/time-kill-colony-counts.csv',
+                         name_repair = 'minimal', col_types = cols())
+####################################################################################
+dt.data.long <- dt.data.wide %>%
+  pivot_longer(cols = -c(1, 2), names_to = 'isolate.info', values_to = 'colonies')
+# splitting up information for each sample
+isolate.info <- strsplit(dt.data.long$isolate.info, '-')
+# resetting tibble with all data
+dt.data <- tibble(isolate = unlist(lapply(isolate.info, '[', 1)),
+                  bio.rep = unlist(lapply(isolate.info, '[', 2)),
+                  tech.rep = as.numeric(unlist(lapply(isolate.info, '[', 3))),
+                  time.point = as.numeric(unlist(lapply(isolate.info, '[', 4))),
+                  dilution = as.numeric(dt.data.long$dilution),
+                  dilution.factor = as.numeric(dt.data.long$dilution.factor),
+                  colonies = dt.data.long$colonies)
+# remove NAs representing rows with too many or too few colonies
+dt.data <- na.omit(dt.data)
+# calculating cfus per ml
+dt.data$cfus.per.ml <- (dt.data$colonies / dt.data$dilution.factor) * (1000 / 4) # 4 µl spotted
+# summarising and getting averages across replicates
+dt.data.avg <- dt.data %>% group_by(isolate, bio.rep, tech.rep, time.point) %>%
+  summarise(avg.cfus.per.ml = mean(cfus.per.ml), sd.cfus = sd(cfus.per.ml))
+dt.data.avg$sample <- paste(dt.data.avg$isolate, '-', dt.data.avg$bio.rep, '-', dt.data.avg$tech.rep, sep = '')
+
+# getting percent survival for each isolate relative to t0 for that isolate
+isolates <- unique(dt.data.avg$sample)
+survival.per.isolate <- list()
+for (i in 1:length(isolates)) {
+  sample.id.list <- list()
+  percent.survival.list <- list()
+  # for each isolate...
+  isolate.data <- dt.data.avg %>% filter(sample == isolates[i])
+  t0.data <- isolate.data %>% filter(time.point == 0)
+  time.sample.list <- list()
+  times <- c(0, 6, 24, 30, 48, 72)
+  for (j in 1:length(times)) {
+    time.sample.list[j] <- times[j]
+    sample.id.list[j] <- isolates[i]
+    if (times[j] %in% unique(isolate.data$time.point)) {
+      percent.survival <- ( dt.data.avg %>%
+                              filter(time.point == times[j], sample == isolates[i]) %>%
+                              pull(avg.cfus.per.ml) / t0.data %>%
+                              pull(avg.cfus.per.ml) ) * 100
+    }
+    else {
+      percent.survival <- NA
+    }
+    percent.survival.list[j] <- percent.survival
+  }
+  survival.per.isolate[[i]] <- tibble(sample = unlist(sample.id.list),
+                                      time.point = unlist(time.sample.list),
+                                      percent.survival = unlist(percent.survival.list))
+}
+# binding all survival data back together
+percent.survival.table <- do.call('rbind', survival.per.isolate)
+# factorizing and re-leveling data based on sample ID
+percent.survival.table$isolate <- unlist(lapply(strsplit(percent.survival.table$sample, '-'), '[', 1))
+percent.survival.table$isolate <- as.factor(percent.survival.table$isolate)
+# getting average values
+percent.survival.table.avg <- percent.survival.table %>% group_by(isolate, time.point) %>%
+  summarise(avg.percent.survival = mean(percent.survival),
+            sd.percent.survival = sd(percent.survival),
+            mad.percent.survival = mad(percent.survival)) %>%
+  ungroup()
+# optional write out to file
+write_csv(percent.survival.table, file = '../data/Fig1/inh-tolerance-final-data.csv')
+# sub-setting data to only contain mutant data
+all.mutants <- percent.survival.table %>% filter(isolate %in% c('ohrR', 'mfs1', 'ntaA'))
+all.mutants$isolate <- factor(all.mutants$isolate, levels = c('ohrR', 'mfs1', 'ntaA'))
+avg.mutants <- percent.survival.table.avg %>% filter(isolate %in% c('ohrR', 'mfs1', 'ntaA'))
+avg.mutants$isolate <- factor(avg.mutants$isolate, levels = c('ohrR', 'mfs1', 'ntaA'))
+
+# creating time kill curves
+kill.curves <- ggplot(all.mutants, aes(x = time.point, y = percent.survival)) +
+  geom_line(aes(group = sample, color = isolate), alpha = 0.25, linetype = 'dashed') +
+  geom_line(data = percent.survival.table %>%
+              filter(isolate == 'wt') %>%
+              select(-isolate), aes(x = time.point, y = percent.survival, group = sample),
+            color = 'blue', alpha = 0.15, linetype = 'dashed') +
+  geom_line(data = avg.mutants, aes(x = time.point, y = avg.percent.survival, color = isolate), linewidth = 2) +
+  geom_point(data = avg.mutants, aes(x = time.point, y = avg.percent.survival, color = isolate), size = 3.5) +
+  geom_line(data = percent.survival.table.avg %>% filter(isolate == 'wt') %>%
+              select(-isolate), aes(x = time.point, y = avg.percent.survival), color = 'blue', linewidth = 2) +
+  geom_point(data = percent.survival.table.avg %>% filter(isolate == 'wt') %>%
+               select(-isolate), aes(x = time.point, y = avg.percent.survival), color = 'blue', size = 3.5) +
+  geom_hline(yintercept = 1, linetype = 'dashed') +
+  scale_color_manual(values = c('red', 'gold2', 'green3')) +
+  xlab('Time point (hours)') + ylab('Survival (%)') +
+  facet_wrap(~isolate) +
+  scale_y_log10(breaks = trans_breaks('log10', function(x) 10^x),
+                labels = trans_format('log10', math_format(10^.x))) +
+  theme_minimal() +
+  plot.theme + theme(legend.position = 'none')
+
+pdf(file = '../figures/figure-panels/fig1-panel-g.pdf', height = 5, width = 14)
+print(kill.curves)
+dev.off()
+```
+
+**Figure 1 Panel G**
+```{r}
+kill.curves
+```
