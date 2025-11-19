@@ -46,7 +46,7 @@ resistance evolution**
 
 ### Directory structure
 
-    manuscript/
+    Mycobacterium_PreR/
     ├── code/          
     ├── data/          
     ├── figures/       
