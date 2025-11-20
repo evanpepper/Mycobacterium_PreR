@@ -13,7 +13,7 @@ compensatory adaptations. Using *M. smegmatis* mc<sup>2</sup>155 (Msm) as a mode
 we show that brief exposure to sublethal INH (2× IC<sub>50</sub>) enriches for
 "low-level resistance and tolerance" (LLRT) mutants in a single step.
 These LLRT mutants, particularly those with *ohrR* loss-of-function
-mutations, acquire high-level resistance (\>500× IC<sub>50</sub>) at 6-fold higher
+mutations, acquire high-level resistance (> 500× IC<sub>50</sub>) at 6-fold higher
 rates than wildtype, primarily through otherwise-deleterious mycothiol
 biosynthesis mutations that become tolerable in the
 oxidative-stress-buffered background.
