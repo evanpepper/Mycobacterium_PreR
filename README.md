@@ -12,7 +12,7 @@ paradigm that resistance mutations always precede their fitness
 compensatory adaptations. Using *M. smegmatis* mc²155 (Msm) as a model,
 we show that brief exposure to sublethal INH (2× IC₅₀) enriches for
 "low-level resistance and tolerance" (LLRT) mutants in a single step.
-These LLRT mutants, particularly those with **ohrR** loss-of-function
+These LLRT mutants, particularly those with *ohrR* loss-of-function
 mutations, acquire high-level resistance (\>500× IC₅₀) at 6-fold higher
 rates than wildtype, primarily through otherwise-deleterious mycothiol
 biosynthesis mutations that become tolerable in the
@@ -23,7 +23,7 @@ mimicking host immune pressure, nearly tripled the rate of INH
 resistance evolution in Msm. Bayesian analysis of 1,578 clinical Mtb
 isolates from Vietnam confirmed that mutations in oxidative stress
 response genes were significantly associated with the emergence of INHR
-strains (p-value = 1.09 × 10⁻⁷). Independently, reanalysis of
+strains (*p-value* = 1.09 × 10⁻⁷). Independently, reanalysis of
 genome-wide CRISPRi screens revealed that the OSR network and high Bayes
 probability genes are functionally associated with treatment escape and
 survival under multiple antibiotics, including isoniazid, rifampicin,
