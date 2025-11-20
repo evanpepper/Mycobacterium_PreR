@@ -7,7 +7,7 @@ The rapid emergence of multidrug-resistant *Mycobacterium tuberculosis*
 evolution of drug resistance in Mtb remain poorly understood. Here we
 reveal that pre-existing mutations in oxidative stress response (OSR)
 genes create permissive genomic backgrounds that accelerate high-level
-isoniazid resistance (INHR) without fitness costs, challenging the
+isoniazid resistance (INH<sup>R</sup>) without fitness costs, challenging the
 paradigm that resistance mutations always precede their fitness
 compensatory adaptations. Using *M. smegmatis* mc²155 (Msm) as a model,
 we show that brief exposure to sublethal INH (2× IC₅₀) enriches for
