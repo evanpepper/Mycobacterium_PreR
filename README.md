@@ -70,7 +70,7 @@ resistance evolution**
 
 ## Citation
 
-*(DOI)*
+<a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank"><strong>Link to bioRxiv preprint</strong></a>
 
 ## Contact
 
