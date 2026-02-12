@@ -38,11 +38,7 @@ antibiotic resistance in tuberculosis.
 
 ## Repository Overview
 
-This repository contains all computational and analytical components
-supporting the manuscript:
-
-**Host oxidative stress primes mycobacteria for rapid antibiotic
-resistance evolution**
+This repository contains all code and data required to reproduce the analysis and figures in this manuscript.
 
 ### Directory structure
 
@@ -67,6 +63,37 @@ resistance evolution**
 2.  Install dependencies for each R Markdown file, found at the beginning of each script.
 
 3.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
+
+## Dependencies
+
+The analyses in this repository were performed using the following software and R packages:
+
+- **R** (version 4.1.1)  
+- **scales** (version 1.4.0)  
+- **ggpubr** (version 0.6.1)  
+- **rstatix** (version 0.7.2)  
+- **naniar** (version 1.1.0)  
+- **factoextra** (version 1.0.7)  
+- **knitr** (version 1.50)  
+- **drc** (version 3.0-1)  
+- **lubridate** (version 1.9.4)  
+- **forcats** (version 1.0.0)  
+- **stringr** (version 1.5.1)  
+- **dplyr** (version 1.1.4)  
+- **purrr** (version 1.1.0)  
+- **readr** (version 2.1.5)  
+- **tidyr** (version 1.3.1)  
+- **tibble** (version 3.3.0)  
+- **tidyverse** (version 2.0.0)  
+- **growthcurver** (version 0.3.1)  
+- **ggridges** (version 0.5.7)  
+- **ggplot2** (version 3.5.2)  
+- **ggrepel** (version 0.9.6)  
+- **ggupset** (version 0.4.1)  
+- **see** (version 0.11.0)  
+- **viridis** (version 0.6.5)  
+- **seqinr** (version 4.2-36)  
+- **Biostrings** (version 2.72.1)  
 
 ## Citation
 
