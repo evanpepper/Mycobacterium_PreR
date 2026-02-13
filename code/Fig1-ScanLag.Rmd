@@ -5,7 +5,7 @@ output: html_notebook
 
 **Author: Evan Pepper-Tunick**
 
-Last updated: Nov 19, 2025
+Last updated: Feb 12, 2026
 
 This notebook is for analyzing the data generated in the ScanLag experiments using wildtype *M. smegmatis* mc2155. Also included is the analysis of the growth of the isolates chosen from the ScanLag experiment. ScanLag is a technology originally developed in the Balaban lab (10.1038/nmeth.1485) by Levin-Reisman et al. 2010.
 
@@ -118,7 +118,7 @@ for (i in 1:length(unique.colonies)) {
     annotate("segment", x = run, xend = max(smooth.data$time), y = 0, yend = cs, color = 'red',
              linetype = 'dashed') +
     annotate("text", x = (run + 10), y = (0.2 * max(smooth.data$pred.growth)),
-             label = paste('max rate:\n', round(r, digits = 2), sep = ''), color = 'red', size = 4) +
+             label = paste('max rate:\n', round(r, digits = 2), '\npixels/hour', sep = ''), color = 'red', size = 4) +
     ggtitle(paste('colony', unique.colonies[i], sep = ' ')) +
     xlab('time (hours)') + ylab('growth (pixels)') +
     theme_minimal() +
@@ -151,12 +151,18 @@ colony.metrics$experiment <- unlist(lapply(strsplit(colony.metrics$colony.label,
 colony.metrics$time.point <- unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 3))
 colony.metrics$treatment <- unlist(lapply(strsplit(
   unlist(lapply(strsplit(colony.metrics$colony.label, '[.]'), '[', 4)), '_'), '[', 1))
+colony.metrics$conditions <- paste(colony.metrics$experiment, '-', colony.metrics$time.point, '-', colony.metrics$treatment, sep = '')
 # filtering data for clustering to only include treated samples on antibiotic plates
 treated.data <- colony.metrics %>%
   filter(treatment == 'plus', time.point == 'post')
 # also gathering untreated data
+# untreated colonies are those which never saw antibiotic
+# untreated conditions include "NA post minus" and "I pre minus"
 untreated.data <- colony.metrics %>%
-  filter(treatment == 'minus')
+  filter(conditions %in% c('I-pre-minus', 'NA-post-minus'))
+# counting the number of isolates screened with ScanLag
+print(paste('In total, ', length(unique(treated.data$colony.label)), ' INH treated colonies (in liquid and agar) were screened with ScanLag', sep = ''))
+print(paste('In total, ', length(unique(untreated.data$colony.label)), ' untreated control colonies (never saw INH) were screened with ScanLag', sep = ''))
 # extracting data for clustering
 cluster.data <- data.frame(treated.data) %>%
   dplyr::select(colony.label, r, cs, toa)
@@ -215,7 +221,7 @@ write_csv(clusters, file = '../data/Fig1/colony-cluster-assignments.csv')
 ```{r}
 # adding cluster information back to growth data to plot growth curves
 growth <- sl.data.filtered
-growth <- merge(growth, clusters[, c(1, 9)])
+growth <- merge(growth, clusters[, c(1, 10)])
 # getting means of each cluster and plotting
 growth.modified <- growth
 growth.modified$time <- round(growth.modified$time, digits = 0)
