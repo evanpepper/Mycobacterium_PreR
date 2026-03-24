@@ -1,1 +1,6 @@
+# Ignore everything in this directory
 data/Fig6/LDF/bayes-null-distributions/INH-global/*
+
+# Allow these files
+!data/Fig6/LDF/bayes-null-distributions/INH-global/.gitkeep
+!data/Fig6/LDF/bayes-null-distributions/INH-global/README.md
