@@ -4,3 +4,4 @@ data/Fig6/LDF/bayes-null-distributions/INH-global/*
 # Allow these files
 !data/Fig6/LDF/bayes-null-distributions/INH-global/.gitkeep
 !data/Fig6/LDF/bayes-null-distributions/INH-global/README.md
+data/Fig6/dst-isolates/SRA-ID-mapping.txt
