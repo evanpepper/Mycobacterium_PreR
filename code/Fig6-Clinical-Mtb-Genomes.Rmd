@@ -177,6 +177,8 @@ variant.summary.data <- full.genotypes %>%
 variant.summary.data <- variant.summary.data %>%
   mutate(EFFECT = fct_reorder(EFFECT, -n))
 
+write_csv(variant.summary.data, file = '../data/Fig6/dst-isolates/variant-count-table.csv')
+
 variant.summary <- ggplot(variant.summary.data, aes(x = EFFECT, y = n)) +
   geom_bar(stat = "identity", color = 'black', fill = 'NA') +
   geom_text(aes(label = n), nudge_y = 0.25, size = 4) +

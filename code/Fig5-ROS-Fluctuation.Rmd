@@ -74,6 +74,13 @@ cfu.data$e.mutant.proportion <- cfu.data$mutants.per.ml / cfu.data$e.cfus.per.ml
 ```{r}
 write_csv(cfu.data, file = '../data/Fig5/fluctuation-assay-calculated-data.csv')
 ```
+```{r}
+cfu.data.avg <- cfu.data %>% group_by(strain, treatment, bio.rep) %>%
+  summarise(mean.e.mutant.proportion = mean(e.mutant.proportion))
+
+avg.fold.change <- mean(cfu.data.avg %>% filter(treatment == 'plus') %>% pull(mean.e.mutant.proportion)) /
+  mean(cfu.data.avg %>% filter(treatment == 'minus') %>% pull(mean.e.mutant.proportion))
+```
 
 ```{r}
 # looking at statistical significance
@@ -96,12 +103,13 @@ fancy_scientific <- function(l) {
 }
 
 # creating plot for mutant frequency
-freq.plot <- ggplot(cfu.data, aes(x = treatment, y = e.mutant.proportion, color = treatment)) +
+freq.plot <- ggplot(cfu.data.avg, aes(x = treatment, y = mean.e.mutant.proportion, color = treatment)) +
   geom_boxplot(outlier.color = NA, alpha = 0.8) +
-  geom_jitter(alpha = 0.5, width = 0.1, shape = 21, fill = 'white') +
+  geom_jitter(alpha = 0.5, width = 0.1, shape = 21, color = 'black', aes(fill = treatment)) +
   xlab('') + ylab('Frequency of INHR acquisition\nwithin population') +
   scale_y_continuous(labels = fancy_scientific, transform = 'log10') +
   scale_color_manual(values = c('blue', 'coral')) +
+  scale_fill_manual(values = c('blue', 'coral')) +
   theme_minimal() +
   plot.theme +
   theme(legend.position = 'none')
