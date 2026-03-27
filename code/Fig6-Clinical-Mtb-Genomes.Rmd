@@ -14,7 +14,7 @@ WGS data was processed and analyzed using an adaptation of the variant calling p
 One important file analyzed here is not included in this work. **This file will be needed to run all of the code in this notebook.** The file is:
 -- CRISPRi strains during various drug treatments from S. Li et. al. 2022. This is Source Data Fig. 1 from this publication and can be downloaded at: 10.1038/s41564-022-01130-y
 
-**Important note: to run notebook, user's computer must have ≥ 10.0 GB memory**
+**Important note: to run notebook, user's computer must have ≥ 12.0 GB memory**
 
 ```{r}
 # importing necessary libraries
@@ -120,7 +120,9 @@ lineage.counts <- ggplot(lineages.summarized, aes(x = major.lineage, y = n, fill
   theme_minimal() +
   plot.theme +
   theme(legend.position = 'none')
+```
 
+```{r}
 pdf(file = '../figures/figure-panels/fig6-panel-a.pdf', height = 4, width = 3)
 print(lineage.counts)
 dev.off()
@@ -240,9 +242,13 @@ status.data$spectrum <- sample.spectrums
 status.data.filtered <- status.data %>% distinct(Sample.ID, .keep_all = TRUE)
 status.data.tally <- status.data.filtered %>% group_by(spectrum) %>% tally() %>% arrange(desc(n))
 status.data.tally$spectrum <- unlist(lapply(status.data.tally$spectrum, function(x) ifelse(is.null(x), NA, x)))
+```
 
+```{r}
 write_csv(status.data.tally, file = '../data/Fig6/susceptibility-profile-counts.csv')
+```
 
+```{r}
 upset.plot <- ggplot(status.data.filtered, aes(x = spectrum)) +
   geom_bar(fill = 'tomato4', color = 'black') +
   scale_x_upset(n_intersections = 8) +
@@ -324,6 +330,9 @@ print('done computing bayes probabilities (global)')
 names(bayes) <- 'bayes'
 bayes$locus <- rownames(snp.data.wide)
 bayes <- bayes %>% arrange(desc(bayes))
+```
+
+```{r}
 write_csv(bayes, file = '../data/Fig6/LDF/bayes-probabilities/INH-Global.csv')
 #################################################################################
 ```
@@ -335,8 +344,8 @@ path.to.nulls <- '../data/Fig6/LDF/bayes-null-distributions/INH-global-download'
 null.files <- list.files(path = path.to.nulls)
 null.dists <- list()
 print('reading in nulls (global)')
-for (i in 1:100) {
-# for (i in 1:length(null.files)) {
+#for (i in 1:100) {
+for (i in 1:length(null.files)) {
   null.dists[[i]] <- read_csv(file = paste(path.to.nulls, '/', null.files[i], sep = ''), show_col_types = FALSE)
 }
 null.bayes <- do.call(rbind, null.dists)
@@ -534,7 +543,7 @@ for (d in 1:length(treatments)) {
   treatment <- treatments[d]
   selected.sheet <- sheets[d]
   
-  crispri.data <- readxl::read_excel(path = '../data-public-upon-request/li-et-al-2022-table-SD-F1.xlsx', sheet = selected.sheet)
+  crispri.data <- readxl::read_excel(path = '../data/published-data/li-et-al-2022-table-SD-F1.xlsx', sheet = selected.sheet)
   
   crispri.data$`locus tag` <- paste('Rv', unlist(lapply(strsplit(unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 1)), 'RVBD'), '[', 2)), sep = '')
   crispri.data[crispri.data == 'RvNA'] <- NA
@@ -647,8 +656,16 @@ crispri.enrichment.tests.filtered <- crispri.enrichment.tests %>% filter(hyper.t
 ```
 
 ```{r}
+# write out file
+write_csv(crispri.enrichment.tests.filtered, file = '../data/Fig6/crispri-enrichment-tests-filtered.csv')
+```
+
+```{r}
 bayes.crispri.enrichment <- crispri.enrichment.tests.filtered
 bayes.crispri.enrichment$overlapping.genes <- sapply(bayes.crispri.enrichment$overlapping.genes, function(x) paste(x, collapse = ', '))
+```
+
+```{r}
 write_csv(bayes.crispri.enrichment, file = '../data/Fig6/bayes-enrichment-in-crispri.csv')
 ```
 
@@ -656,7 +673,7 @@ write_csv(bayes.crispri.enrichment, file = '../data/Fig6/bayes-enrichment-in-cri
 ```{r}
 # creating volcano plot from Li et al. 2022, Figure 1C, to show overlap of genes with high Bayes probability
 # this will also be Figure 6 Panel E
-crispri.data <- readxl::read_excel(path = '../data-public-upon-request/li-et-al-2022-table-SD-F1.xlsx', sheet = 13)
+crispri.data <- readxl::read_excel(path = '../data/published-data/li-et-al-2022-table-SD-F1.xlsx', sheet = 13)
 
 crispri.data$`locus tag` <- paste('Rv', unlist(lapply(strsplit(unlist(lapply(strsplit(crispri.data$ORF_ID, ':'), '[', 1)), 'RVBD'), '[', 2)), sep = '')
 crispri.data[crispri.data == 'RvNA'] <- NA
