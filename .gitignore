@@ -7,3 +7,4 @@ data/Fig6/LDF/bayes-null-distributions/INH-global/*
 data/Fig6/dst-isolates/SRA-ID-mapping.txt
 data/Fig6/LDF/bayes-null-distributions/INH-global.tar.gz
 data/Fig6/LDF/bayes-null-distributions/INH-global.tar.gz
+data/Fig6/LDF/bayes-null-distributions/*.tar.gz
