@@ -34,23 +34,24 @@ This repository contains all code and data required to reproduce the analysis an
 
 3.  The Fig. 6 notebook will require downloading two datasets:
 
-    Dataset 1: <a href="10.5281/zenodo.19207254" target="_blank">Bayes Null Distributions from Zenodo</a>
-    Dataset 2: <a href="10.1038/s41564-022-01130-y" target="_blank">Li *et al* 2022, Source Data Fig. 1</a>
+    Dataset 1: <a href="https://doi.org/10.5281/zenodo.19207254" target="_blank">Bayes Null Distributions from Zenodo</a>
+    
+    Dataset 2: <a href="https://doi.org/10.1038/s41564-022-01130-y" target="_blank">Li *et al* 2022, Source Data Fig. 1</a>
 
     Unzip Dataset 1:
 
     ``` bash
     cd Mycobacterium_PreR/ 
     mkdir Mycobacterium_PreR/data/Fig6/LDF/bayes-null-distributions/INH-global-download 	
-    tar -xvf INH-global.tar.gz -C Mycobacterium_PreR/data/Fig6/LDF/bayes-null-distributions/INH-global-download
+    tar -xvf ~/Downloads/INH-global.tar.gz -C Mycobacterium_PreR/data/Fig6/LDF/bayes-null-distributions/INH-global-download
     ``` 
 
     Copy Dataset 2 into the following directory:
     ``` bash
     cd Mycobacterium_PreR/ 
     mkdir Mycobacterium_PreR/data/published-data
-    mv 41564_2022_1130_MOESM4_ESM.xlsx li-et-al-2022-table-SD-F1.xlsx 	
-    cp li-et-al-2022-table-SD-F1.xlsx /data/published-data/li-et-al-2022-table-SD-F1.xlsx
+    mv ~/Downloads/41564_2022_1130_MOESM4_ESM.xlsx ~/Downloads/li-et-al-2022-table-SD-F1.xlsx 	
+    cp ~/Downloads/li-et-al-2022-table-SD-F1.xlsx /data/published-data/li-et-al-2022-table-SD-F1.xlsx
     ``` 
 
 4.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
