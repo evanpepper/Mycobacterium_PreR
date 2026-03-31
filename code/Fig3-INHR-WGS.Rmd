@@ -133,7 +133,7 @@ resistance.fitness.plot.3
 ```
 
 ```{r}
-# creating figure for relative fitness vs ic50 fold change for all strains assayed, supplemental figure
+# creating figure for relative fitness vs ic50 fold change for all strains assayed, supplementary figure
 isolate.avgs$phenotype <- factor(isolate.avgs$phenotype, levels = c('wt-anc', 'wt-inhR',
                                                                     'ohrR-anc', 'ohrR-inhR',
                                                                     'mfs1-anc', 'mfs1-inhR',
@@ -167,7 +167,7 @@ resistance.fitness.plot.all.strains <- ggplot(isolate.avgs, aes(x = avg.ic50.fc,
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig3.pdf', height = 8, width = 14)
+pdf(file = '../supplementary-figures/figure-panels/fig3.pdf', height = 8, width = 14)
 print(resistance.fitness.plot.all.strains)
 dev.off()
 ```

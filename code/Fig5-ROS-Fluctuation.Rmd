@@ -167,7 +167,7 @@ dev.off()
 mss.mle
 ```
 
-Next, analyzing data from cumene hydroperoxide dose response assays for supplemental figure
+Next, analyzing data from cumene hydroperoxide dose response assays for supplementary figure
 
 ```{r}
 # function for converting time
@@ -235,7 +235,7 @@ growth.curves <- ggplot(curve.data.avgs, aes(x = time, y = avg.od, group = inter
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig5-a.pdf', height = 4, width = 8)
+pdf(file = '../supplementary-figures/figure-panels/fig5-a.pdf', height = 4, width = 8)
 print(growth.curves)
 dev.off()
 ```
@@ -354,7 +354,7 @@ dose.response.curves <- ggplot(rg.data %>% filter(`concentration (µM)` != 0), a
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig5-b.pdf', height = 4, width = 8)
+pdf(file = '../supplementary-figures/figure-panels/fig5-b.pdf', height = 4, width = 8)
 print(dose.response.curves)
 dev.off()
 ```
@@ -429,7 +429,7 @@ growth.curves <- ggplot(curve.data.avgs, aes(x = time, y = avg.od, group = inter
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig6-a.pdf', height = 8, width = 10)
+pdf(file = '../supplementary-figures/figure-panels/fig6-a.pdf', height = 8, width = 10)
 print(growth.curves)
 dev.off()
 ```
@@ -542,7 +542,7 @@ dose.response.curves <- ggplot(rg.data %>% filter(`isoniazid (µg/mL)` != 0), ae
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig6-b.pdf', height = 8, width = 10)
+pdf(file = '../supplementary-figures/figure-panels/fig6-b.pdf', height = 8, width = 10)
 print(dose.response.curves)
 dev.off()
 ```
@@ -620,7 +620,7 @@ resistance.fitness.plot <- ggplot(relative.data.avg, aes(x = avg.ic50.fc, y = av
 ```
 
 ```{r}
-pdf(file = '../supplemental-figures/figure-panels/fig6-c.pdf', height = 4, width = 10)
+pdf(file = '../supplementary-figures/figure-panels/fig6-c.pdf', height = 4, width = 10)
 print(resistance.fitness.plot)
 dev.off()
 ```

@@ -271,7 +271,7 @@ table.s1 <- rbind(ros.network.bayes.genes, ros.network.bayes.intergenic)
 ```
 
 ```{r}
-write_csv(table.s1, file = '../supplemental-tables/Supplementary-Data-1-raw.csv')
+write_csv(table.s1, file = '../supplementary-tables/Supplementary-Data-1-raw.csv')
 ```
 
 
@@ -324,7 +324,7 @@ all.osr.nodes <- unique(c(full.network.with.evidence$Source.rv.number, full.netw
 
 all.osr.nodes <- all.osr.nodes[!is.na(all.osr.nodes)]
 
-# importing CRISPRi gene enrichment/depletion data from Supplemental Data 2
+# importing CRISPRi gene enrichment/depletion data from Supplementary Data 2
 treatments <- c('BDQ 1d', 'BDQ 5d', 'BDQ 10d', 'CLR 1d', 'CLR 5d', 'CLR 10d', 'EMB 1d', 'EMB 5d', 'EMB 10d', 'INH 1d', 'INH 5d', 'INH 10d', 'LVX 1d', 'LVX 5d', 'LVX 10d',
                 'LZD 1d', 'LZD 5d', 'LZD 10d', 'RIF 1d', 'RIF 5d', 'RIF 10d', 'STR 1d', 'STR 5d', 'VAN 1d', 'VAN 5d', 'VAN 10d')
 sheets <- c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
@@ -527,5 +527,5 @@ all.tests.summary <- all.tests.summary %>% dplyr::select(Antibiotic, Dose, `Day(
 ```
 
 ```{r}
-write_csv(all.tests.summary, file = '../supplemental-tables/Supplementary-Data-2-raw.csv')
+write_csv(all.tests.summary, file = '../supplementary-tables/Supplementary-Data-2-raw.csv')
 ```

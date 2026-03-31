@@ -251,7 +251,7 @@ dev.off()
 nadh.nad.points
 nadh.nad.boxes
 ```
-Generating plots for supplemental figure for NAD+, NADH, and NADH/NAD+ ratios
+Generating plots for supplementary figure for NAD+, NADH, and NADH/NAD+ ratios
 ```{r}
 # creating figures
 nad.points <- ggplot(all.assay.data, aes(x = strain, y = nad.total, fill = treatment, color = treatment)) +
@@ -290,15 +290,15 @@ nadh.nad.points <- ggplot(all.assay.data, aes(x = strain, y = ratio, fill = trea
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-a-points.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-a-points.pdf', height = 4.5, width = 4)
 print(nad.points)
 dev.off()
 
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-b-points.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-b-points.pdf', height = 4.5, width = 4)
 print(nadh.points)
 dev.off()
 
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-c-points.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-c-points.pdf', height = 4.5, width = 4)
 print(nadh.nad.points)
 dev.off()
 ```
@@ -340,15 +340,15 @@ nadh.nad.boxes <- ggplot(all.assay.data, aes(x = strain, y = ratio, color = inte
 
 ```{r}
 # generating figures
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-a-boxes.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-a-boxes.pdf', height = 4.5, width = 4)
 print(nad.boxes)
 dev.off()
 
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-b-boxes.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-b-boxes.pdf', height = 4.5, width = 4)
 print(nadh.boxes)
 dev.off()
 
-pdf(file = '../supplemental-figures/figure-panels/fig2-panel-c-boxes.pdf', height = 4.5, width = 4)
+pdf(file = '../supplementary-figures/figure-panels/fig2-panel-c-boxes.pdf', height = 4.5, width = 4)
 print(nadh.nad.boxes)
 dev.off()
 ```
@@ -468,7 +468,7 @@ all.ros.conditions <- ggplot(all.rfu.data, aes(x = strain, y = fc, color = strai
 
 ```{r}
 # generating figure
-pdf(file = '../supplemental-figures/figure-panels/fig4.pdf', height = 5, width = 12)
+pdf(file = '../supplementary-figures/figure-panels/fig4.pdf', height = 5, width = 12)
 print(all.ros.conditions)
 dev.off()
 ```

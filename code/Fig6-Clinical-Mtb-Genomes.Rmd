@@ -174,15 +174,16 @@ print(paste('Across all variants, ', n.intergenic, ' were intergenic and ', n.no
 # creating figure 6 panel c
 # summary of mutations in dataset
 variant.summary.data <- full.genotypes %>%
-  group_by(EFFECT) %>% tally() %>% arrange(desc(n))
-variant.summary.data <- variant.summary.data %>%
-  mutate(EFFECT = fct_reorder(EFFECT, -n))
+  group_by(EFFECT, PIPELINE) %>% tally() %>% arrange(desc(n))
+
+variant.summary.data$EFFECT <- factor(variant.summary.data$EFFECT, levels = c(unique(variant.summary.data$EFFECT)))
 
 write_csv(variant.summary.data, file = '../data/Fig6/dst-isolates/variant-count-table.csv')
 
-variant.summary <- ggplot(variant.summary.data, aes(x = EFFECT, y = n)) +
-  geom_bar(stat = "identity", color = 'black', fill = 'NA') +
+variant.summary <- ggplot(variant.summary.data, aes(x = EFFECT, y = n, fill = PIPELINE)) +
+  geom_bar(position = position_dodge(width = 0.9), stat = "identity", color = 'black', alpha = 0.2) +
   geom_text(aes(label = n), nudge_y = 0.25, size = 4) +
+  scale_fill_manual(values = c('white', 'purple')) +
   scale_y_log10() +
   xlab('') + ylab('Variant Count') +
   theme_minimal() +
@@ -531,7 +532,7 @@ File "li-et-al-2022-table-SD-F1.xlsx" below is the Source Data Fig. 1 file from 
 # first converting gene names in bayes probabilities to Rv numbers
 bayes.genic <- bayes[!grepl('-', bayes$locus), ]
 bayes.genic <- left_join(bayes.genic, gene.name.conversion.table)
-# importing CRISPRi gene enrichment/depletion data from Supplemental Data 2
+# importing CRISPRi gene enrichment/depletion data from Published data
 treatments <- c('BDQ 1d', 'BDQ 5d', 'BDQ 10d', 'CLR 1d', 'CLR 5d', 'CLR 10d', 'EMB 1d', 'EMB 5d', 'EMB 10d', 'INH 1d', 'INH 5d', 'INH 10d', 'LVX 1d', 'LVX 5d', 'LVX 10d',
                 'LZD 1d', 'LZD 5d', 'LZD 10d', 'RIF 1d', 'RIF 5d', 'RIF 10d', 'STR 1d', 'STR 5d', 'VAN 1d', 'VAN 5d', 'VAN 10d')
 sheets <- c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
