@@ -2,43 +2,13 @@
 
 ## Abstract
 
-The rapid emergence of multidrug-resistant *Mycobacterium tuberculosis*
-(Mtb) threatens global TB control, yet the mechanisms enabling rapid
-evolution of drug resistance in Mtb remain poorly understood. Here we
-reveal that pre-existing mutations in oxidative stress response (OSR)
-genes create permissive genomic backgrounds that accelerate high-level
-isoniazid resistance (INH<sup>R</sup>) without fitness costs, challenging the
-paradigm that resistance mutations always precede their fitness
-compensatory adaptations. Using *M. smegmatis* mc<sup>2</sup>155 (Msm) as a model,
-we show that brief exposure to sublethal INH (2× IC<sub>50</sub>) enriches for
-"low-level resistance and tolerance" (LLRT) mutants in a single step.
-These LLRT mutants, particularly those with *ohrR* loss-of-function
-mutations, acquire high-level resistance (> 500× IC<sub>50</sub>) at 6-fold higher
-rates than wildtype, primarily through otherwise-deleterious mycothiol
-biosynthesis mutations that become tolerable in the
-oxidative-stress-buffered background.
+The rapid emergence of multidrug-resistant *Mycobacterium tuberculosis* (Mtb) threatens global TB control, yet the mechanisms enabling rapid evolution of resistance in Mtb remain poorly understood. Here, we show that pre-existing mutations in oxidative stress response genes create permissive genomic backgrounds that accelerate high-level isoniazid resistance (INH<sup>R</sup>), challenging the paradigm that resistance mutations must precede compensatory adaptation. Using *Mycobacterium smegmatis* mc<sup>2</sup>155 (Msm) as a model, we demonstrate that brief exposure to sublethal isoniazid (INH) enriches for “low-level resistance and tolerance” (LLRT) mutants in a single step. LLRT mutants, particularly those with *ohrR* loss-of-function mutations, acquire high-level resistance (>500× IC<sub>50</sub>) at ~6-fold higher rates than wildtype, primarily through otherwise deleterious mycothiol biosynthesis mutations that become tolerable in an oxidative stress-buffered background.
 
-Crucially, we demonstrate that sublethal oxidative stress alone,
-mimicking host immune pressure, nearly tripled the rate of INH
-resistance evolution in Msm. Bayesian analysis of 1,578 clinical Mtb
-isolates from Vietnam confirmed that mutations in oxidative stress
-response genes were significantly associated with the emergence of INH<sup>R</sup>
-strains (*p-value* = 1.09 × 10<sup>-7</sup>). Independently, reanalysis of
-genome-wide CRISPRi screens revealed that the OSR network and high Bayes
-probability genes are functionally associated with treatment escape and
-survival under multiple antibiotics, including isoniazid, rifampicin,
-ethambutol, bedaquiline, vancomycin, clarithromycin, linezolid, and
-streptomycin.
-
-Our findings that host-imposed oxidative stress and inadequate drug
-penetration may synergistically prime Mtb populations for rapid
-resistance evolution suggest that targeting pre-resistance mechanisms,
-such as oxidative stress defenses, could help slow the emergence of
-antibiotic resistance in tuberculosis.
+Crucially, sublethal oxidative stress alone, mimicking host immune pressure, nearly tripled the rate of INH<sup>R</sup> evolution. Analysis of 1,578 clinical Mtb isolates revealed significant enrichment of oxidative stress-related loci among those associated with INH<sup>R</sup>. Reanalysis of genome-wide CRISPRi data further linked oxidative stress response pathways to survival under multiple antibiotics. Together, these findings suggest that host-imposed oxidative stress and suboptimal drug exposure may prime Mtb populations for rapid resistance evolution, highlighting oxidative stress defenses as potential targets to limit resistance emergence.
 
 ## Repository Overview
 
-This repository contains all code and data required to reproduce the analysis and figures in this manuscript.
+This repository contains all code and data required to reproduce the analysis and figures in the associated <a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank">manuscript</a>.
 
 ### Directory structure
 
@@ -46,8 +16,8 @@ This repository contains all code and data required to reproduce the analysis an
     ├── code/          
     ├── data/          
     ├── figures/       
-    ├── supplemental-figures/
-    ├── supplemental-tables/
+    ├── supplementary-figures/
+    ├── supplementary-tables/
     ├── LICENSE       
     └── README.md      
 
@@ -62,7 +32,28 @@ This repository contains all code and data required to reproduce the analysis an
 
 2.  Install dependencies for each R Markdown file, found at the beginning of each script.
 
-3.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
+3.  The Fig. 6 notebook will require downloading two datasets:
+
+    Dataset 1: <a href="10.5281/zenodo.19207254" target="_blank">Bayes Null Distributions from Zenodo</a>
+    Dataset 2: <a href="10.1038/s41564-022-01130-y" target="_blank">Li *et al* 2022, Source Data Fig. 1</a>
+
+    Unzip Dataset 1:
+
+    ``` bash
+    cd Mycobacterium_PreR/ 
+    mkdir Mycobacterium_PreR/data/Fig6/LDF/bayes-null-distributions/INH-global-download 	
+    tar -xvf INH-global.tar.gz -C Mycobacterium_PreR/data/Fig6/LDF/bayes-null-distributions/INH-global-download
+    ``` 
+
+    Copy Dataset 2 into the following directory:
+    ``` bash
+    cd Mycobacterium_PreR/ 
+    mkdir Mycobacterium_PreR/data/published-data
+    mv 41564_2022_1130_MOESM4_ESM.xlsx li-et-al-2022-table-SD-F1.xlsx 	
+    cp li-et-al-2022-table-SD-F1.xlsx /data/published-data/li-et-al-2022-table-SD-F1.xlsx
+    ``` 
+
+4.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
 
 ## Dependencies
 
