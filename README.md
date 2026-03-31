@@ -8,7 +8,7 @@ Crucially, sublethal oxidative stress alone, mimicking host immune pressure, nea
 
 ## Repository Overview
 
-This repository contains all code and data required to reproduce the analysis and figures in the associated <a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank">manuscript</a>.
+This repository contains all code and data required to reproduce the analysis and figures in the associated manuscript: <a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank">Host oxidative stress primes mycobacteria for rapid antibiotic resistance evolution</a>.
 
 ### Directory structure
 
@@ -54,7 +54,7 @@ This repository contains all code and data required to reproduce the analysis an
     cp ~/Downloads/li-et-al-2022-table-SD-F1.xlsx /data/published-data/li-et-al-2022-table-SD-F1.xlsx
     ``` 
 
-4.  Run the R Markdown file, either cell by cell or all at once. Figures will be deposited into `figures/` and generated results will appear in `data/`
+4.  Run the R Markdown file, either cell by cell or all at once. Reproduced figures will be deposited into `figures/` and generated results will appear in `data/`
 
 ## Dependencies
 
