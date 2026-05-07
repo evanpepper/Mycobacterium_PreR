@@ -8,7 +8,7 @@ Crucially, sublethal oxidative stress alone, mimicking host immune pressure, nea
 
 ## Repository Overview
 
-This repository contains all code and data required to reproduce the analysis and figures in the associated manuscript: <a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank">Host oxidative stress primes mycobacteria for rapid antibiotic resistance evolution</a>.
+This repository contains all code and data required to reproduce the analysis and figures in the associated article, published in Nature Communications: <a href="https://www.nature.com/articles/s41467-026-72496-4" target="_blank">Host oxidative stress primes mycobacteria for rapid antibiotic resistance evolution</a>.
 
 ### Directory structure
 
@@ -89,7 +89,7 @@ The analyses in this repository were performed using the following software and 
 
 ## Citation
 
-<a href="https://doi.org/10.1101/2025.11.19.689367" target="_blank"><strong>Link to bioRxiv preprint</strong></a>
+<a href="https://www.nature.com/articles/s41467-026-72496-4" target="_blank"><strong>Link to Nature Communications article</strong></a>
 
 ## Contact
 
